@@ -33,16 +33,16 @@ const products = [
     platform: 'PostgreSQL',
     extension: '.pgpkg',
     description: 'Package, compare, and safely apply a desired PostgreSQL schema with a Go-native CLI.',
-    quickstart: '/pgpac/learn/quickstart',
-    reference: '/pgpac/reference/project-file',
+    quickstart: '/docs/pgpac/learn/quickstart',
+    reference: '/docs/pgpac/reference/project-file',
   },
   {
     name: 'd1pac',
     platform: 'Cloudflare D1',
     extension: '.d1pkg',
     description: 'Bring the same desired-state delivery loop to D1 while respecting SQLite semantics.',
-    quickstart: '/d1pac/learn/quickstart',
-    reference: '/d1pac/reference/project-file',
+    quickstart: '/docs/d1pac/learn/quickstart',
+    reference: '/docs/d1pac/reference/project-file',
   },
 ];
 
@@ -80,13 +80,13 @@ export default function Home() {
               </Heading>
               <p className={styles.heroLead}>
                 Starpac is the home of two focused desired-state compilers. Use pgpac for PostgreSQL or d1pac
-                for Cloudflare D1, with independent packages, releases, and engine-native behavior.
+                for Cloudflare D1, with distinct packages and engine-native behavior under one Starpac version.
               </p>
               <div className={styles.actions}>
-                <Link className={styles.primaryAction} to="/pgpac/learn/quickstart">
+                <Link className={styles.primaryAction} to="/docs/pgpac/learn/quickstart">
                   Start with pgpac <ArrowIcon />
                 </Link>
-                <Link className={styles.secondaryAction} to="/d1pac/learn/quickstart">
+                <Link className={styles.secondaryAction} to="/docs/d1pac/learn/quickstart">
                   Start with d1pac
                 </Link>
               </div>
@@ -153,7 +153,7 @@ export default function Home() {
             <div className={styles.sectionHeading}>
               <p className={styles.kicker}>Two tools, equal footing</p>
               <Heading as="h2">Choose your database.</Heading>
-              <p>Each tool keeps its own CLI, package format, documentation, changelog, and release cadence.</p>
+              <p>Each tool keeps its own CLI, package format, and documentation while sharing one Starpac release history.</p>
             </div>
             <div className={styles.productGrid}>
               {products.map((product) => (
@@ -208,7 +208,7 @@ export default function Home() {
                 Package a declarative model, compare it to a target, then publish the delta. The common workflow
                 stays familiar while PostgreSQL and D1 keep independent parsers, models, diff engines, and transports.
               </p>
-              <Link className={styles.textLink} to="/pgpac/">
+              <Link className={styles.textLink} to="/docs/pgpac/">
                 Explore pgpac documentation <ArrowIcon />
               </Link>
             </div>
@@ -238,7 +238,7 @@ export default function Home() {
                 <p className={styles.kicker}>Your schema already has a destination.</p>
                 <Heading as="h2">Make it the source of truth.</Heading>
               </div>
-              <Link className={styles.primaryAction} to="/d1pac/learn/installation">
+              <Link className={styles.primaryAction} to="/docs/d1pac/learn/installation">
                 Install d1pac <ArrowIcon />
               </Link>
             </div>

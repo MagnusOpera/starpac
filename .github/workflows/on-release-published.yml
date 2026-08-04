@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Scoped release tag, for example pgpac/v1.2.3
+        description: Global release tag, for example v0.6.0
         required: true
         type: string
 
@@ -18,31 +18,43 @@ jobs:
   identify:
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-      tool: ${{ steps.tag.outputs.tool }}
-      version: ${{ steps.tag.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      artifacts: ${{ steps.release.outputs.artifacts }}
+      has-artifacts: ${{ steps.release.outputs.has-artifacts }}
     steps:
       - uses: actions/checkout@v4
-      - id: tag
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - id: release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          read -r tool version < <(./.github/scripts/parse-release-tag.sh "$RELEASE_TAG")
+          version="$(./.github/scripts/parse-release-tag.sh "$RELEASE_TAG")"
+          test "$(jq -r .version .starpac/release.json)" = "$version"
+          artifacts="$(jq -c .artifacts .starpac/release.json)"
+          count="$(jq '.artifacts | length' .starpac/release.json)"
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "tool=$tool" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "artifacts=$artifacts" >> "$GITHUB_OUTPUT"
+          if [[ "$count" -gt 0 ]]; then echo "has-artifacts=true" >> "$GITHUB_OUTPUT"; else echo "has-artifacts=false" >> "$GITHUB_OUTPUT"; fi
 
   sign-and-notarize:
     needs: identify
+    if: needs.identify.outputs.has-artifacts == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: ${{ fromJSON(needs.identify.outputs.artifacts) }}
     runs-on: macos-15
     steps:
       - uses: robinraju/release-downloader@v1.11
         with:
           tag: ${{ needs.identify.outputs.tag }}
-          fileName: '${{ needs.identify.outputs.tool }}-*-darwin-arm64-unsigned.zip'
+          fileName: '${{ matrix.tool }}-*-darwin-arm64-unsigned.zip'
       - name: Extract binary
         env:
-          TOOL: ${{ needs.identify.outputs.tool }}
+          TOOL: ${{ matrix.tool }}
           VERSION: ${{ needs.identify.outputs.version }}
         run: |
           mkdir -p .out/darwin/arm64
@@ -53,7 +65,7 @@ jobs:
           p12-password: ${{ secrets.MAC_CERT_PASSWORD }}
       - name: Sign binary
         env:
-          TOOL: ${{ needs.identify.outputs.tool }}
+          TOOL: ${{ matrix.tool }}
           VERSION: ${{ needs.identify.outputs.version }}
           TEAM_ID: ${{ secrets.MAC_DEV_TEAM_ID }}
         run: |
@@ -69,7 +81,7 @@ jobs:
       - uses: GuillaumeFalourd/notary-tools@v1
         timeout-minutes: 10
         with:
-          product_path: '.out/darwin/${{ needs.identify.outputs.tool }}-${{ needs.identify.outputs.version }}-darwin-arm64.zip'
+          product_path: '.out/darwin/${{ matrix.tool }}-${{ needs.identify.outputs.version }}-darwin-arm64.zip'
           apple_id: ${{ secrets.MAC_DEV_LOGIN }}
           password: ${{ secrets.MAC_DEV_PASSWORD }}
           team_id: ${{ secrets.MAC_DEV_TEAM_ID }}
@@ -78,13 +90,13 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.identify.outputs.tag }}
-          files: '.out/darwin/${{ needs.identify.outputs.tool }}-${{ needs.identify.outputs.version }}-darwin-arm64.zip'
+          files: '.out/darwin/${{ matrix.tool }}-${{ needs.identify.outputs.version }}-darwin-arm64.zip'
       - name: Remove unsigned macOS artifact
         continue-on-error: true
         uses: actions/github-script@v7
         env:
           RELEASE_TAG: ${{ needs.identify.outputs.tag }}
-          TOOL: ${{ needs.identify.outputs.tool }}
+          TOOL: ${{ matrix.tool }}
           VERSION: ${{ needs.identify.outputs.version }}
         with:
           script: |
@@ -105,10 +117,14 @@ jobs:
 
   update-homebrew-tap:
     needs: [identify, sign-and-notarize]
+    if: always() && needs.identify.result == 'success' && needs.sign-and-notarize.result == 'success'
+    strategy:
+      matrix:
+        tool: ${{ fromJSON(needs.identify.outputs.artifacts) }}
     uses: ./.github/workflows/release-homebrew-tap.yml
     with:
       ref: ${{ needs.identify.outputs.tag }}
-      tool: ${{ needs.identify.outputs.tool }}
+      tool: ${{ matrix.tool }}
       version: ${{ needs.identify.outputs.version }}
       dry-run: false
     secrets: inherit

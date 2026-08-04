@@ -4,8 +4,7 @@ run-name: Prepare release ${{ github.ref_name }}
 on:
   push:
     tags:
-      - 'pgpac/v*'
-      - 'd1pac/v*'
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -14,30 +13,32 @@ jobs:
   identify:
     runs-on: ubuntu-latest
     outputs:
-      tool: ${{ steps.tag.outputs.tool }}
-      version: ${{ steps.tag.outputs.version }}
+      version: ${{ steps.release.outputs.version }}
+      matrix: ${{ steps.release.outputs.matrix }}
+      has-artifacts: ${{ steps.release.outputs.has-artifacts }}
     steps:
       - uses: actions/checkout@v4
-      - id: tag
+        with:
+          fetch-depth: 2
+      - id: release
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          read -r tool version < <(./.github/scripts/parse-release-tag.sh "$RELEASE_TAG")
-          echo "tool=$tool" >> "$GITHUB_OUTPUT"
+          version="$(./.github/scripts/parse-release-tag.sh "$RELEASE_TAG")"
+          test "$(jq -r .version .starpac/release.json)" = "$version"
+          test "$(jq -r .commit .starpac/release.json)" = "$(git rev-parse HEAD^)"
+          matrix="$(jq -c '{include: [.artifacts[] as $tool | {tool: $tool, runner: "ubuntu-latest", label: "linux-x64"}, {tool: $tool, runner: "ubuntu-24.04-arm", label: "linux-arm64"}, {tool: $tool, runner: "macos-14", label: "darwin-arm64"}]}' .starpac/release.json)"
+          count="$(jq '.artifacts | length' .starpac/release.json)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          if [[ "$count" -gt 0 ]]; then echo "has-artifacts=true" >> "$GITHUB_OUTPUT"; else echo "has-artifacts=false" >> "$GITHUB_OUTPUT"; fi
 
   build-release-archive:
     needs: identify
+    if: needs.identify.outputs.has-artifacts == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            label: linux-x64
-          - runner: ubuntu-24.04-arm
-            label: linux-arm64
-          - runner: macos-14
-            label: darwin-arm64
+      matrix: ${{ fromJSON(needs.identify.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -45,16 +46,16 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./...
-      - run: make release-build tool=${{ needs.identify.outputs.tool }} version=${{ needs.identify.outputs.version }}
+      - run: make release-build tool=${{ matrix.tool }} version=${{ needs.identify.outputs.version }}
       - name: Rename unsigned macOS archive
         if: startsWith(matrix.label, 'darwin-')
         env:
-          TOOL: ${{ needs.identify.outputs.tool }}
+          TOOL: ${{ matrix.tool }}
           VERSION: ${{ needs.identify.outputs.version }}
         run: mv ".out/${TOOL}-${VERSION}-darwin-arm64.zip" ".out/${TOOL}-${VERSION}-darwin-arm64-unsigned.zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.label }}
+          name: release-${{ matrix.tool }}-${{ matrix.label }}
           path: .out/*.zip
           if-no-files-found: error
           include-hidden-files: true
@@ -62,17 +63,26 @@ jobs:
   create-draft-release:
     runs-on: ubuntu-latest
     needs: [identify, build-release-archive]
+    if: always() && needs.identify.result == 'success' && (needs.build-release-archive.result == 'success' || needs.build-release-archive.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
+        if: needs.identify.outputs.has-artifacts == 'true'
         with:
           pattern: release-*
           merge-multiple: true
           path: .out
-      - run: ./.github/scripts/extract-release-notes.sh "${{ needs.identify.outputs.tool }}" "${{ needs.identify.outputs.version }}" > "${RUNNER_TEMP}/release-notes.md"
+      - run: ./.github/scripts/extract-release-notes.sh "${{ needs.identify.outputs.version }}" > "${RUNNER_TEMP}/release-notes.md"
       - uses: softprops/action-gh-release@v2
+        if: needs.identify.outputs.has-artifacts == 'true'
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
           body_path: ${{ runner.temp }}/release-notes.md
           files: .out/*.zip
+      - uses: softprops/action-gh-release@v2
+        if: needs.identify.outputs.has-artifacts != 'true'
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          body_path: ${{ runner.temp }}/release-notes.md

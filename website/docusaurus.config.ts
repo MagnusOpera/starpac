@@ -28,47 +28,23 @@ const config: Config = {
     [
       'classic',
       {
-        docs: false,
+        docs: {
+          path: 'docs',
+          routeBasePath: 'docs',
+          sidebarPath: './sidebars.ts',
+          lastVersion: process.env.STARPAC_DOCS_LAST_VERSION ?? 'current',
+          versions: {
+            current: {
+              label: 'Next',
+            },
+          },
+          editUrl: 'https://github.com/MagnusOpera/starpac/tree/main/website/',
+        },
         blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },
       } satisfies Preset.Options,
-    ],
-  ],
-
-  plugins: [
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'pgpac',
-        path: 'docs/pgpac',
-        routeBasePath: 'pgpac',
-        sidebarPath: './sidebars/pgpac.ts',
-        lastVersion: process.env.PGPAC_DOCS_LAST_VERSION ?? 'current',
-        versions: {
-          current: {
-            label: 'Next',
-          },
-        },
-        editUrl: 'https://github.com/MagnusOpera/starpac/tree/main/website/',
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'd1pac',
-        path: 'docs/d1pac',
-        routeBasePath: 'd1pac',
-        sidebarPath: './sidebars/d1pac.ts',
-        lastVersion: process.env.D1PAC_DOCS_LAST_VERSION ?? 'current',
-        versions: {
-          current: {
-            label: 'Next',
-          },
-        },
-        editUrl: 'https://github.com/MagnusOpera/starpac/tree/main/website/',
-      },
     ],
   ],
 
@@ -87,28 +63,17 @@ const config: Config = {
       },
       items: [
         {
-          type: 'docSidebar',
-          docsPluginId: 'pgpac',
-          sidebarId: 'docs',
+          to: '/docs/pgpac/',
           position: 'left',
           label: 'pgpac',
         },
         {
-          type: 'docsVersionDropdown',
-          docsPluginId: 'pgpac',
-          position: 'left',
-          dropdownActiveClassDisabled: true,
-        },
-        {
-          type: 'docSidebar',
-          docsPluginId: 'd1pac',
-          sidebarId: 'docs',
+          to: '/docs/d1pac/',
           position: 'left',
           label: 'd1pac',
         },
         {
           type: 'docsVersionDropdown',
-          docsPluginId: 'd1pac',
           position: 'left',
           dropdownActiveClassDisabled: true,
         },
@@ -125,25 +90,24 @@ const config: Config = {
         {
           title: 'pgpac',
           items: [
-            {label: 'Installation', to: '/pgpac/learn/installation'},
-            {label: 'Quickstart', to: '/pgpac/learn/quickstart'},
-            {label: 'Reference', to: '/pgpac/reference/project-file'},
+            {label: 'Installation', to: '/docs/pgpac/learn/installation'},
+            {label: 'Quickstart', to: '/docs/pgpac/learn/quickstart'},
+            {label: 'Reference', to: '/docs/pgpac/reference/project-file'},
           ],
         },
         {
           title: 'd1pac',
           items: [
-            {label: 'Installation', to: '/d1pac/learn/installation'},
-            {label: 'Quickstart', to: '/d1pac/learn/quickstart'},
-            {label: 'Reference', to: '/d1pac/reference/project-file'},
+            {label: 'Installation', to: '/docs/d1pac/learn/installation'},
+            {label: 'Quickstart', to: '/docs/d1pac/learn/quickstart'},
+            {label: 'Reference', to: '/docs/d1pac/reference/project-file'},
           ],
         },
         {
           title: 'Project',
           items: [
             {label: 'Repository', href: 'https://github.com/MagnusOpera/starpac'},
-            {label: 'pgpac changelog', href: 'https://github.com/MagnusOpera/starpac/blob/main/products/pgpac/CHANGELOG.md'},
-            {label: 'd1pac changelog', href: 'https://github.com/MagnusOpera/starpac/blob/main/products/d1pac/CHANGELOG.md'},
+            {label: 'Changelog', href: 'https://github.com/MagnusOpera/starpac/blob/main/CHANGELOG.md'},
           ],
         },
       ],

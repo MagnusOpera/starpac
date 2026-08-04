@@ -16,10 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Enforce product changelogs
-        env:
-          REQUIRE_CHANGELOG_ALWAYS: "true"
-          ENFORCE_UNRELEASED_BULLET: "true"
+      - name: Enforce changelog
         run: ./.github/scripts/check-unreleased-changelog.sh
       - uses: actions/setup-go@v5
         with:

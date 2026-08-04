@@ -73,7 +73,7 @@ Current compatibility policy:
 
 - The shared docs site lives under `website/` and is built with Docusaurus.
 - Build this tool with `make pgpac-build`; run the combined suite with `make test`.
-- Releases are prepared with `make release-prepare tool=pgpac version=X.Y.Z`.
+- Global releases are prepared with `make release-prepare version=X.Y.Z`; pgpac artifacts are included automatically when pgpac or shared code changed.
 - Tagged builds create draft GitHub releases with platform archives.
 - Published releases update `magnusopera/homebrew-tap`; the website is deployed independently from `main` with the Publish Website workflow.
 

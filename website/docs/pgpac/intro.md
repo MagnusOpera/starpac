@@ -1,7 +1,7 @@
 ---
 id: intro
 title: pgpac
-slug: /
+slug: /pgpac/
 ---
 
 `pgpac` is a Go-first PostgreSQL schema packaging tool in the spirit of `sqlpackage`, built around a standalone CLI and an XML project file.

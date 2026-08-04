@@ -11,7 +11,7 @@ version="$2"
 case "$tool" in pgpac|d1pac) ;; *) echo "ERROR: Unknown tool '$tool'."; exit 2;; esac
 repository="${STARPAC_GH_REPO:-MagnusOpera/starpac}"
 template_file="$(dirname "$0")/${tool}-formula-template.rb"
-tag="${tool}/v${version}"
+tag="v${version}"
 download_dir="$(mktemp -d)"
 cleanup() { rm -rf "$download_dir"; }
 trap cleanup EXIT
@@ -25,7 +25,7 @@ gh release download --repo "$repository" "$tag" \
 darwin_sha=$(shasum -a 256 "${tool}-${version}-darwin-arm64.zip" | cut -d' ' -f1)
 linux_x64_sha=$(shasum -a 256 "${tool}-${version}-linux-x64.zip" | cut -d' ' -f1)
 linux_arm64_sha=$(shasum -a 256 "${tool}-${version}-linux-arm64.zip" | cut -d' ' -f1)
-release_base="https://github.com/${repository}/releases/download/${tool}%2Fv${version}"
+release_base="https://github.com/${repository}/releases/download/v${version}"
 
 sed \
   -e "s|__VERSION__|${version}|g" \

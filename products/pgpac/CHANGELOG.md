@@ -1,12 +1,6 @@
 # Changelog
 
-All notable changes to pgpac are documented in this file.
-
-## [Unreleased]
-
-- Moved pgpac into the Starpac monorepo while preserving its CLI, project, package, and release contracts.
-- Shared stable package, plan, rendering, project-resolution, safety, and CLI infrastructure with d1pac.
-- Fixed the mobile website navigation so its menu remains fully visible.
+This file contains the standalone pgpac release history through version 0.5.1. Starpac releases beginning with 0.6.0 are documented in the repository root `CHANGELOG.md`.
 
 ## [0.5.1]
 

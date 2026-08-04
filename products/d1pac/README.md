@@ -82,6 +82,8 @@ make website-typecheck
 make website-build
 ```
 
+Global releases are prepared with `make release-prepare version=X.Y.Z`; d1pac artifacts are included automatically when d1pac or shared code changed.
+
 ## License
 
 This repository is licensed under the MIT License. See [LICENSE](LICENSE).

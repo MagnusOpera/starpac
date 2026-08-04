@@ -1,6 +1,6 @@
 ---
 title: Introduction
-slug: /
+slug: /d1pac/
 ---
 
 `d1pac` is a Go-first desired-state schema packaging tool for Cloudflare D1.

@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <pgpac|d1pac> <version>"
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <version>"
   exit 2
 fi
 
-tool="$1"
-version="$2"
-case "$tool" in pgpac|d1pac) ;; *) echo "ERROR: Unknown tool '$tool'."; exit 2;; esac
-changelog="products/${tool}/CHANGELOG.md"
+version="$1"
 section_body=$(awk -v header="## [${version}]" '
   $0 == header {inside=1; next}
   /^## \[/ && inside {exit}
   inside {print}
-' "$changelog")
+' CHANGELOG.md)
 
 if [[ -z "${section_body//[[:space:]]/}" ]]; then
-  echo "ERROR: Missing or empty changelog section '## [${version}]' in ${changelog}."
+  echo "ERROR: Missing or empty changelog section '## [${version}]'."
   exit 1
 fi
 if ! grep -qE '^[[:space:]]*- ' <<<"$section_body"; then

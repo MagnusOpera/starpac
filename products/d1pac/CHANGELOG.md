@@ -1,9 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-- Moved d1pac into the Starpac monorepo while preserving its CLI, project, package, and release contracts.
-- Shared stable package, plan, rendering, project-resolution, safety, and CLI infrastructure with pgpac.
+This file contains the standalone d1pac release history through version 0.0.3. Starpac releases beginning with 0.6.0 are documented in the repository root `CHANGELOG.md`.
 
 ## [0.0.3]
 

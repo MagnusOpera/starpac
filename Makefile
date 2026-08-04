@@ -28,15 +28,14 @@ sample:
 	go run ./cmd/d1pac build --project products/d1pac/testdata/sample/sample.d1pac --output out/
 
 verify-changelog:
-	REQUIRE_CHANGELOG_ALWAYS=true ENFORCE_UNRELEASED_BULLET=true ./.github/scripts/check-unreleased-changelog.sh
+	./.github/scripts/check-unreleased-changelog.sh
 
 release-build:
 	@case "$(tool)" in pgpac|d1pac) ;; *) echo "Usage: make release-build tool=<pgpac|d1pac> version=X.Y.Z"; exit 2;; esac
 	./.github/scripts/build-release-archive.sh "$(tool)" "$(version)" "$(RELEASE_DIR)"
 
 release-prepare:
-	@case "$(tool)" in pgpac|d1pac) ;; *) echo "Usage: make release-prepare tool=<pgpac|d1pac> version=X.Y.Z"; exit 2;; esac
-	./.github/scripts/release.sh "$(tool)" "$(version)" "$(dryrun)"
+	./.github/scripts/release.sh "$(version)" "$(dryrun)"
 
 release-smoke:
 	./.github/scripts/release-smoke.sh
@@ -55,8 +54,7 @@ website-build:
 	cd website && npm run build
 
 website-version:
-	@case "$(tool)" in pgpac|d1pac) ;; *) echo "Usage: make website-version tool=<pgpac|d1pac> version=X.Y.Z"; exit 2;; esac
-	cd website && npm run version-docs -- "$(tool)" "$(version)"
+	cd website && npm run version-docs -- "$(version)"
 
 website:
 	cd website && npm run start

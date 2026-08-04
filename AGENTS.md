@@ -22,12 +22,11 @@ Features and fixes require automated coverage. Keep live PostgreSQL and Cloudfla
 
 ## Changelogs
 
-- pgpac changes update `products/pgpac/CHANGELOG.md`.
-- d1pac changes update `products/d1pac/CHANGELOG.md`.
-- shared code, repository infrastructure, or combined website changes update both changelogs.
-- Keep a top-level `## [Unreleased]` section with short, user-facing bullets.
-- Run `make verify-changelog`; CI enforces the same product-aware rules.
+- Every change updates the root `CHANGELOG.md`.
+- Keep a top-level `## [Unreleased]` section with short, user-facing bullets under the relevant Starpac, pgpac, or d1pac heading.
+- Product changelogs under `products/` are standalone-history archives and are not updated for new releases.
+- Run `make verify-changelog`; CI enforces the same rule.
 
 ## Releases
 
-Use `make release-prepare tool=<pgpac|d1pac> version=X.Y.Z`. Preview with `dryrun=true`. The command prepares only the selected changelog and docs, then creates an annotated `<tool>/vX.Y.Z` tag. Tag CI builds only that product; publishing its draft release signs it and updates only its Homebrew formula.
+Use `make release-prepare version=X.Y.Z`. Preview with `dryrun=true`. The command detects affected binaries, records them in `.starpac/release.json`, prepares the changelog and global docs version, then creates an annotated `vX.Y.Z` tag. Tag CI trusts that manifest and publishes only its selected artifacts.
