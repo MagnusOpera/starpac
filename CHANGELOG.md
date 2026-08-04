@@ -6,10 +6,14 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.6.1]
+
+
 ### Starpac
 
 - Fixed Homebrew formula template resolution and serialized tap updates for multi-tool releases.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.6.0...v0.6.1
 ## [0.6.0]
 
 
