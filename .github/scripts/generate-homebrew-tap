@@ -10,7 +10,8 @@ tool="$1"
 version="$2"
 case "$tool" in pgpac|d1pac) ;; *) echo "ERROR: Unknown tool '$tool'."; exit 2;; esac
 repository="${STARPAC_GH_REPO:-MagnusOpera/starpac}"
-template_file="$(dirname "$0")/${tool}-formula-template.rb"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+template_file="${script_dir}/${tool}-formula-template.rb"
 tag="v${version}"
 download_dir="$(mktemp -d)"
 cleanup() { rm -rf "$download_dir"; }

@@ -119,6 +119,8 @@ jobs:
     needs: [identify, sign-and-notarize]
     if: always() && needs.identify.result == 'success' && needs.sign-and-notarize.result == 'success'
     strategy:
+      fail-fast: false
+      max-parallel: 1
       matrix:
         tool: ${{ fromJSON(needs.identify.outputs.artifacts) }}
     uses: ./.github/workflows/release-homebrew-tap.yml

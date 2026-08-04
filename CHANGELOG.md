@@ -6,6 +6,10 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### Starpac
+
+- Fixed Homebrew formula template resolution and serialized tap updates for multi-tool releases.
+
 ## [0.6.0]
 
 

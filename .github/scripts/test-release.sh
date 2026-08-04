@@ -110,8 +110,11 @@ EOF
 chmod +x "$test_root/homebrew-bin/gh"
 for tool in pgpac d1pac; do
   formula="$test_root/${tool}.rb"
-  PATH="$test_root/homebrew-bin:$PATH" MOCK_TOOL="$tool" MOCK_VERSION="0.6.1" \
-    "$repo_root/.github/scripts/generate-homebrew-tap" "$tool" 0.6.1 > "$formula"
+  (
+    cd "$(dirname "$repo_root")"
+    PATH="$test_root/homebrew-bin:$PATH" MOCK_TOOL="$tool" MOCK_VERSION="0.6.1" \
+      "./$(basename "$repo_root")/.github/scripts/generate-homebrew-tap" "$tool" 0.6.1
+  ) > "$formula"
   grep -q 'version "0.6.1"' "$formula"
   grep -q "MagnusOpera/starpac/releases/download/v0.6.1/${tool}-0.6.1-linux-arm64.zip" "$formula"
   grep -q "bin.install \"${tool}\"" "$formula"
