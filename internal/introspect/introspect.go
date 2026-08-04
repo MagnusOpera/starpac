@@ -58,14 +58,7 @@ ORDER BY type, name`)
 }
 
 func LoadRemote(ctx context.Context, queryer RemoteQueryer, ignore IgnoreFunc) (*model.SchemaModel, error) {
-	versionRows, err := queryer.Query(ctx, "SELECT sqlite_version() AS sqlite_version")
-	if err != nil {
-		return nil, err
-	}
 	schema := &model.SchemaModel{}
-	if len(versionRows) > 0 {
-		schema.SQLiteVersion = stringValue(versionRows[0]["sqlite_version"])
-	}
 	rows, err := queryer.Query(ctx, `
 SELECT type, name, tbl_name, sql
 FROM sqlite_schema

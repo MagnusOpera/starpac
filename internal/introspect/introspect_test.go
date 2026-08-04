@@ -11,8 +11,6 @@ type fixtureQueryer struct{}
 
 func (fixtureQueryer) Query(_ context.Context, sql string) ([]map[string]any, error) {
 	switch {
-	case strings.Contains(sql, "sqlite_version"):
-		return []map[string]any{{"sqlite_version": "3.46.0"}}, nil
 	case strings.Contains(sql, "FROM sqlite_schema"):
 		return []map[string]any{
 			{"type": "table", "name": "widgets", "tbl_name": "widgets", "sql": "CREATE TABLE widgets (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES widgets(id))"},
@@ -43,7 +41,7 @@ func TestLoadRemoteBuildsSemanticSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadRemote returned error: %v", err)
 	}
-	if schema.SQLiteVersion != "3.46.0" {
+	if schema.SQLiteVersion != "" {
 		t.Fatalf("SQLiteVersion = %q", schema.SQLiteVersion)
 	}
 	if len(schema.Tables) != 1 || len(schema.Tables[0].Columns) != 2 || len(schema.Tables[0].ForeignKeys) != 1 {

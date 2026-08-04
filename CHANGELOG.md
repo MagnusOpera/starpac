@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed remote D1 introspection using the restricted `sqlite_version()` function.
+
 ## [0.0.2]
 
 
