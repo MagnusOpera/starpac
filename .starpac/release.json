@@ -1,21 +1,7 @@
 {
-  "version": "0.6.1",
-  "previous": "v0.6.0",
-  "commit": "6b0b698664fb1b182c28fb1c9e6c775b71d99194",
-  "artifacts": [
-    "pgpac",
-    "d1pac"
-  ],
-  "reasons": {
-    "pgpac": [
-      ".github/scripts/generate-homebrew-tap",
-      ".github/scripts/test-release.sh",
-      ".github/workflows/on-release-published.yml"
-    ],
-    "d1pac": [
-      ".github/scripts/generate-homebrew-tap",
-      ".github/scripts/test-release.sh",
-      ".github/workflows/on-release-published.yml"
-    ]
-  }
+  "version": "0.6.2",
+  "previous": "v0.6.1",
+  "commit": "f3e6860d14a2f9922fb7e194874e0603b74826ef",
+  "artifacts": [],
+  "reasons": {}
 }

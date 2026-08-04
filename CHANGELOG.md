@@ -6,10 +6,14 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.6.2]
+
+
 ### Starpac
 
 - Made the `*pac` family naming explicit on the homepage and kept the latest released documentation free of archive warnings.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.6.1...v0.6.2
 ## [0.6.1]
 
 
