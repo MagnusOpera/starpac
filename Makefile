@@ -20,6 +20,7 @@ build:
 
 test:
 	go test ./...
+	./.github/scripts/test-release.sh
 
 sample: $(SAMPLE_PACKAGE)
 

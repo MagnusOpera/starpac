@@ -7,3 +7,4 @@
 - Added package artifacts, documentation website, release automation, and Homebrew publishing.
 - Fixed the homepage deployment example contrast in light theme.
 - Fixed changelog validation in a newly initialized repository.
+- Fixed release preparation on macOS when release notes span multiple lines.

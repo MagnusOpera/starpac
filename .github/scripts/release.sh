@@ -46,14 +46,24 @@ if [[ "$dryrun" == "true" ]]; then
   exit 0
 fi
 
+body_file=$(mktemp)
 temporary=$(mktemp)
-awk -v version="$version" -v body="$unreleased" -v link="$compare_link" '
+cleanup() {
+  rm -f "$body_file" "$temporary"
+}
+trap cleanup EXIT
+
+printf '%s\n' "$unreleased" > "$body_file"
+awk -v version="$version" -v body_file="$body_file" -v link="$compare_link" '
   $0 == "## [Unreleased]" {
     print
     print ""
     print "## [" version "]"
     print ""
-    print body
+    while ((getline body_line < body_file) > 0) {
+      print body_line
+    }
+    close(body_file)
     print ""
     print link
     skip=1
