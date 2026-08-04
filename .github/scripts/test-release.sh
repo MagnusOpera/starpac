@@ -11,7 +11,7 @@ mkdir -p "$repository/.github/scripts" "$repository/website" "$repository/bin"
 cp "$repo_root/.github/scripts/release.sh" "$repository/.github/scripts/release.sh"
 cp "$repo_root/.github/scripts/detect-impact.py" "$repository/.github/scripts/detect-impact.py"
 printf '{}\n' > "$repository/website/package.json"
-printf '# Changelog\n\n## [Unreleased]\n\n- Established the global release baseline.\n' > "$repository/CHANGELOG.md"
+printf '# Changelog\n\n## [Unreleased]\n\n- Established the global release baseline.\n\n## Standalone pgpac release history\n\n### pgpac [0.5.1]\n\n- Historical pgpac entry.\n' > "$repository/CHANGELOG.md"
 cat > "$repository/bin/npm" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -90,6 +90,8 @@ assert_artifacts ""
 
 grep -q '^## \[0.6.3\]$' "$repository/CHANGELOG.md"
 grep -q '^\*\*Full Changelog\*\*:' "$repository/CHANGELOG.md"
+grep -q '^## Standalone pgpac release history$' "$repository/CHANGELOG.md"
+grep -q '^- Historical pgpac entry\.$' "$repository/CHANGELOG.md"
 
 test "$("$repo_root/.github/scripts/parse-release-tag.sh" v1.2.3)" = "1.2.3"
 if "$repo_root/.github/scripts/parse-release-tag.sh" pgpac/v1.2.3 >/dev/null 2>&1; then

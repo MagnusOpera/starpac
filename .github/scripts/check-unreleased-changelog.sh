@@ -26,7 +26,7 @@ if ! grep -qx 'CHANGELOG.md' <<<"$changed_files"; then
   exit 1
 fi
 
-unreleased=$(awk '/^## \[Unreleased\]/{inside=1; next} /^## \[/{if(inside){exit}} inside{print}' CHANGELOG.md)
+unreleased=$(awk '/^## \[Unreleased\]/{inside=1; next} /^## /{if(inside){exit}} inside{print}' CHANGELOG.md)
 head_subject="$(git log -1 --pretty=%s 2>/dev/null || true)"
 if [[ -z "${unreleased//[[:space:]]/}" ]]; then
   if [[ "$head_subject" =~ ^chore\(release\):\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then

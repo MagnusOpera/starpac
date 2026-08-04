@@ -9,7 +9,7 @@ fi
 version="$1"
 section_body=$(awk -v header="## [${version}]" '
   $0 == header {inside=1; next}
-  /^## \[/ && inside {exit}
+  /^## / && inside {exit}
   inside {print}
 ' CHANGELOG.md)
 

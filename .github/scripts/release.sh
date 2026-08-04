@@ -25,7 +25,7 @@ if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
   exit 1
 fi
 
-unreleased=$(awk '/^## \[Unreleased\]/{inside=1; next} /^## \[/{if(inside){exit}} inside{print}' CHANGELOG.md)
+unreleased=$(awk '/^## \[Unreleased\]/{inside=1; next} /^## /{if(inside){exit}} inside{print}' CHANGELOG.md)
 if [[ -z "${unreleased//[[:space:]]/}" ]] || ! grep -qE '^[[:space:]]*- ' <<<"$unreleased"; then
   echo "ERROR: CHANGELOG.md Unreleased section must contain at least one bullet."
   exit 1
@@ -71,7 +71,7 @@ awk -v version="$version" -v body_file="$body_file" -v link="$compare_link" '
     skip=1
     next
   }
-  skip && /^## \[/ {skip=0}
+  skip && /^## / {skip=0}
   !skip {print}
 ' CHANGELOG.md > "$updated_changelog"
 mv "$updated_changelog" CHANGELOG.md
