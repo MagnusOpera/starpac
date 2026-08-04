@@ -1,0 +1,30 @@
+import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
+
+const sidebars: SidebarsConfig = {
+  docs: [
+    'intro',
+    {
+      type: 'category',
+      label: 'Learn',
+      items: [
+        'learn/installation',
+        'learn/quickstart',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Reference',
+      items: [
+        'reference/project-file',
+        'reference/build-command',
+        'reference/plan-command',
+        'reference/apply-command',
+        'reference/package-format',
+        'reference/safety-model',
+      ],
+    },
+    'whats-new',
+  ],
+};
+
+export default sidebars;

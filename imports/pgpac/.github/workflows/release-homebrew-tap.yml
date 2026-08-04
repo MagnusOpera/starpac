@@ -1,0 +1,92 @@
+name: Update Homebrew Tap
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        description: GitHub ref to use
+        type: string
+      version:
+        required: true
+        description: Version to produce
+        type: string
+      dry-run:
+        required: false
+        default: true
+        description: Whether to skip pushing the tap commit
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      ref:
+        required: true
+        description: GitHub ref to use
+        type: string
+      version:
+        required: true
+        description: Version to produce
+        type: string
+      dry-run:
+        required: false
+        default: true
+        description: Whether to skip pushing the tap commit
+        type: boolean
+
+env:
+  PGPAC_VERSION: ${{ inputs.version }}
+
+jobs:
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pgpac repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: pgpac
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: magnusopera/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.PAT_HOMEBREW_TAP }}
+
+      - name: Update Homebrew formula
+        env:
+          PGPAC_GH_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ./pgpac/.github/scripts/generate-homebrew-tap \
+            "${PGPAC_VERSION}" \
+            ./pgpac/.github/scripts/pgpac-formula-template.rb \
+            > ./homebrew-tap/Formula/pgpac.rb
+
+      - name: Commit updated tap
+        working-directory: homebrew-tap
+        run: |
+          set -euo pipefail
+
+          git config user.name magnusopera-bot
+          git config user.email bot@magnusopera.io
+          git add Formula/pgpac.rb
+
+          if git diff --cached --quiet; then
+            echo "No tap changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Brew formula update for pgpac version ${PGPAC_VERSION}"
+
+      - name: Push tap
+        working-directory: homebrew-tap
+        if: ${{ !inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main

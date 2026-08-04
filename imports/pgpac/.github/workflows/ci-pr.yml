@@ -1,0 +1,58 @@
+name: CI PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce unreleased changelog updates
+        env:
+          REQUIRE_CHANGELOG_ALWAYS: "true"
+          ENFORCE_UNRELEASED_BULLET: "true"
+        run: .github/scripts/check-unreleased-changelog.sh
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Release build smoke
+        run: make release-build version=0.0.0-ci
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install website dependencies
+        run: make website-install
+
+      - name: Typecheck website
+        run: make website-typecheck
+
+      - name: Build website
+        run: make website-build

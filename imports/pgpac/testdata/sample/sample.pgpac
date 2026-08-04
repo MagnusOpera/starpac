@@ -1,0 +1,30 @@
+<PgPac ProjectVersion="1">
+  <PropertyGroup>
+    <PackageId>SampleProject</PackageId>
+    <Version>0.1.0</Version>
+    <PostgresVersion>18</PostgresVersion>
+    <DefaultSchema>app</DefaultSchema>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Schema Include="Schemas/**/*.sql" />
+    <Table Include="Tables/**/*.sql" />
+    <View Include="Views/**/*.sql" />
+    <Function Include="Functions/**/*.sql" />
+    <Type Include="Types/**/*.sql" />
+    <Extension Include="Extensions/**/*.sql" />
+    <Security Include="Security/**/*.sql" />
+  </ItemGroup>
+
+  <Target>
+    <OwnedSchemas>
+      <Schema Name="app" />
+    </OwnedSchemas>
+    <Extensions>
+      <Extension Name="pgcrypto" Version="1.3" />
+    </Extensions>
+    <Comparison MatchPrivileges="false" MatchOwners="false" MatchComments="true" />
+    <Plan AllowCreate="true" AllowAlter="true" AllowDrop="false" />
+    <Apply UseTransaction="true" LockTimeout="5s" StatementTimeout="10m" StopOnDataLossRisk="true" />
+  </Target>
+</PgPac>

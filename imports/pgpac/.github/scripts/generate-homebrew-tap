@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+PGPAC_VERSION="${1}"
+TAP_TEMPLATE_FILE="$(realpath "${2}")"
+PGPAC_GH_REPO="${PGPAC_GH_REPO:-MagnusOpera/pgpac}"
+
+export PGPAC_VERSION
+
+cd "$(mktemp -d)"
+
+>&2 echo "::info Generating Homebrew formula for pgpac ${PGPAC_VERSION}"
+>&2 echo "::group::Download release assets"
+>&2 gh release download --repo "${PGPAC_GH_REPO}" "${PGPAC_VERSION}" \
+  -p "pgpac-${PGPAC_VERSION}-darwin-arm64.zip" \
+  -p "pgpac-${PGPAC_VERSION}-linux-x64.zip" \
+  -p "pgpac-${PGPAC_VERSION}-linux-arm64.zip" \
+  --skip-existing
+>&2 echo "::endgroup::"
+
+for i in \
+  "darwin arm64 PGPAC_DARWIN_ARM64" \
+  "linux  x64   PGPAC_LINUX_X64" \
+  "linux arm64  PGPAC_LINUX_ARM64" \
+  ; do
+  # shellcheck disable=SC2086
+  set -- $i
+  OS="$1"
+  ARCH="$2"
+  ENV_VAR="$3"
+  ASSET="pgpac-${PGPAC_VERSION}-${OS}-${ARCH}.zip"
+  SHA256="$(sha256sum "$ASSET" | cut -f1 -d' ')"
+
+  SHA256_VAR="${ENV_VAR}_SHA256"
+  URL_VAR="${ENV_VAR}_URL"
+  printf -v "${SHA256_VAR}" "%s" "${SHA256}"
+  printf -v "${URL_VAR}" "%s" "https://github.com/${PGPAC_GH_REPO}/releases/download/${PGPAC_VERSION}/${ASSET}"
+
+  export "${SHA256_VAR?}"
+  export "${URL_VAR?}"
+  >&2 echo "${OS}-${ARCH} SHA256: ${!SHA256_VAR}"
+  >&2 echo "${OS}-${ARCH} URL:    ${!URL_VAR}"
+done
+
+envsubst '$PGPAC_VERSION,$PGPAC_DARWIN_ARM64_URL,$PGPAC_DARWIN_ARM64_SHA256,$PGPAC_LINUX_X64_URL,$PGPAC_LINUX_X64_SHA256,$PGPAC_LINUX_ARM64_URL,$PGPAC_LINUX_ARM64_SHA256' < "${TAP_TEMPLATE_FILE}"

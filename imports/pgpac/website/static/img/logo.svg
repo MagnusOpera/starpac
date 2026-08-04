@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title>pgpac</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#102431" />
+      <stop offset="100%" stop-color="#2a6685" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)" />
+  <path d="M30 38h42c16 0 26 10 26 25s-10 25-26 25H58v18H30V38zm28 24h11c7 0 11-3 11-8s-4-8-11-8H58v16z" fill="#f6f8fa" />
+  <path d="M66 88h17l15 18H81L66 88z" fill="#e77d11" />
+</svg>

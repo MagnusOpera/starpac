@@ -1,0 +1,23 @@
+.features {
+  padding: 1.5rem 0 4rem;
+}
+
+.featureCard {
+  height: 100%;
+  padding: 1.5rem;
+  border: 1px solid rgba(36, 58, 80, 0.12);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 245, 250, 0.92));
+  box-shadow: 0 14px 36px rgba(28, 46, 62, 0.08);
+}
+
+.featureCard h3 {
+  margin-bottom: 0.75rem;
+  color: #102431;
+}
+
+.featureCard p {
+  margin: 0;
+  color: #405266;
+  line-height: 1.7;
+}
