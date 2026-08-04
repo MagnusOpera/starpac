@@ -45,7 +45,7 @@ export default function Home() {
   return (
     <Layout
       title="Desired-state delivery for PostgreSQL and D1"
-      description="Starpac is home to pgpac and d1pac: independent desired-state database delivery tools with one familiar workflow."
+      description="*pac (pronounced Starpac) is a family of desired-state database tools: pgpac for PostgreSQL and d1pac for Cloudflare D1."
     >
       <main className={styles.page}>
         <section className={styles.hero}>
@@ -53,15 +53,15 @@ export default function Home() {
             <div className={styles.heroCopy}>
               <div className={styles.eyebrow}>
                 <span className={styles.statusDot} />
-                pgpac + d1pac
+                The *pac tool family
               </div>
               <Heading as="h1" className={styles.heroTitle}>
                 Define the state.
                 <span>Ship the difference.</span>
               </Heading>
               <p className={styles.heroLead}>
-                Starpac is the home of two focused desired-state compilers. Use pgpac for PostgreSQL or d1pac
-                for Cloudflare D1, with distinct packages and engine-native behavior under one Starpac version.
+                *pac (pronounced “Starpac”) is a family of focused desired-state database tools: pgpac for
+                PostgreSQL and d1pac for Cloudflare D1.
               </p>
               <div className={styles.actions}>
                 <Link className={styles.primaryAction} to="/docs/pgpac/learn/quickstart">
@@ -76,7 +76,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className={styles.productVisual} aria-label="Starpac desired-state workflow example">
+            <div className={styles.productVisual} aria-label="*pac desired-state workflow example">
               <div className={styles.visualGlow} />
               <div className={styles.sourceCard}>
                 <div className={styles.cardBar}>
@@ -132,7 +132,7 @@ export default function Home() {
         <section className={styles.processSection}>
           <div className="container">
             <div className={styles.sectionHeading}>
-              <p className={styles.kicker}>The Starpac loop</p>
+              <p className={styles.kicker}>The *pac loop</p>
               <Heading as="h2">From desired state to database update.</Heading>
             </div>
             <div className={styles.workflow}>

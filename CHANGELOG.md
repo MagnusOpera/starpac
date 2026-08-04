@@ -6,6 +6,10 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### Starpac
+
+- Made the `*pac` family naming explicit on the homepage and kept the latest released documentation free of archive warnings.
+
 ## [0.6.1]
 
 

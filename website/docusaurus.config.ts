@@ -1,11 +1,16 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import releasedVersions from './versions.json';
 
 const baseUrl = '/starpac/';
+const latestReleasedVersion = releasedVersions[0];
+const latestReleasedVersionOptions = latestReleasedVersion
+  ? {[latestReleasedVersion]: {banner: 'none' as const}}
+  : {};
 
 const config: Config = {
-  title: 'Starpac',
+  title: '*pac',
   tagline: 'Desired-state database delivery for PostgreSQL and Cloudflare D1.',
   favicon: 'img/logo.svg',
 
@@ -32,11 +37,12 @@ const config: Config = {
           path: 'docs',
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
-          lastVersion: process.env.STARPAC_DOCS_LAST_VERSION ?? 'current',
+          lastVersion: 'current',
           versions: {
             current: {
               label: 'Next',
             },
+            ...latestReleasedVersionOptions,
           },
           editUrl: 'https://github.com/MagnusOpera/starpac/tree/main/website/',
         },
@@ -56,9 +62,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Starpac',
+      title: '*pac',
       logo: {
-        alt: 'Starpac logo',
+        alt: '*pac logo',
         src: 'img/logo.svg',
       },
       items: [
