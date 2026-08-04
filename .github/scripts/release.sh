@@ -89,4 +89,4 @@ git add CHANGELOG.md .starpac/release.json website
 git commit -m "chore(release): ${version}"
 git tag -a "$tag" -m "Release ${version}"
 echo "Release ${version} prepared locally with binary artifacts: ${artifacts}."
-echo "Push main and ${tag} only after review."
+echo "git push --follow-tags origin main"

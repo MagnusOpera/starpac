@@ -11,6 +11,7 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 - Unified pgpac and d1pac under global Starpac versions with automatic partial artifact publishing.
 - Consolidated the documentation into one version history and one website version selector.
 - Simplified the homepage and aligned the pgpac and d1pac primary actions.
+- Made release preparation print the exact command for pushing the release commit and annotated tag.
 
 ### pgpac
 
