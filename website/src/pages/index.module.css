@@ -72,7 +72,7 @@
 
 .actions { display: flex; flex-wrap: wrap; gap: .85rem; margin-top: 2rem; }
 
-.primaryAction, .secondaryAction {
+.primaryAction {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -89,9 +89,6 @@
 .primaryAction { background: var(--orange); color: #140b07; }
 .primaryAction:hover { transform: translateY(-2px); background: #ff7d45; color: #140b07; }
 .primaryAction svg, .textLink svg { width: 1.15rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
-.secondaryAction { border: 1px solid #344c58; color: #e9f0f2; }
-.secondaryAction:hover { transform: translateY(-2px); border-color: #6b8794; color: #fff; }
-
 .dacpacNote { margin: 1.45rem 0 0; font-size: .8rem; color: #718b98; }
 .dacpacNote span { color: #9eb4be; }
 
@@ -135,22 +132,11 @@
 .planFooter strong { margin-left: auto; color: #adc2ca; font-weight: 500; }
 .heroRule { position: absolute; right: 0; bottom: 0; left: 0; height: .3rem; background: linear-gradient(90deg, var(--orange) 0 28%, #f3a66f 28% 44%, #2d98bc 44% 72%, #113746 72%); }
 
-.productsSection { padding: 7rem 0 1rem; }
 .processSection { padding: 7rem 0 7.5rem; }
 .sectionHeading { display: grid; grid-template-columns: .65fr 1.1fr .75fr; gap: 2.5rem; align-items: end; margin-bottom: 4rem; }
 .kicker { color: #e45721; }
 .sectionHeading .kicker { align-self: start; margin-top: .65rem; }
 .sectionHeading h2, .ideaCopy h2, .finalCta h2 { margin: 0; font-family: var(--ifm-font-family-base); font-size: clamp(2.4rem, 4.7vw, 4.6rem); font-weight: 750; letter-spacing: -.055em; line-height: .98; color: var(--ink); }
-.sectionHeading > p:last-child { margin: 0; font-size: 1.05rem; line-height: 1.65; color: #52616a; }
-
-.productGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.4rem; }
-.productCard { min-height: 22rem; padding: 2.5rem; border: 1px solid #cfcbc0; border-radius: .55rem; background: #efede6; }
-.productMeta { display: flex; align-items: center; justify-content: space-between; color: #69767c; font-family: var(--ifm-font-family-monospace); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
-.productMeta code { border: 1px solid #d4d0c5; background: transparent; color: #d85624; }
-.productCard h3 { margin: 3.5rem 0 1rem; font-size: clamp(2.7rem, 5vw, 4.5rem); letter-spacing: -.055em; }
-.productCard > p { max-width: 34rem; color: #52616a; font-size: 1.02rem; line-height: 1.7; }
-.productLinks { display: flex; align-items: center; gap: 1.4rem; margin-top: 2rem; }
-.productLinks > a:last-child { color: #52616a; font-size: .9rem; font-weight: 700; }
 .commandPair { display: flex; flex-wrap: wrap; gap: .45rem; }
 
 .workflow { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #c9c6bc; }
@@ -192,9 +178,8 @@
 .quality > span { font-family: var(--ifm-font-family-monospace); font-size: .65rem; color: #d85624; }
 .quality h3 { margin: 4.5rem 0 1rem; font-family: var(--ifm-font-family-base); font-size: 1.55rem; }
 .quality p { margin: 0; color: #58656c; line-height: 1.7; }
-.finalCta { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-top: 6rem; padding-top: 4rem; border-top: 1px solid #cfcbc0; }
+.finalCta { margin-top: 6rem; padding-top: 4rem; border-top: 1px solid #cfcbc0; }
 .finalCta .kicker { margin-bottom: .8rem; }
-.finalCta .primaryAction { flex: 0 0 auto; }
 
 @media (max-width: 996px) {
   .hero { padding-top: 5rem; }
@@ -215,29 +200,25 @@
   .dacpacNote { line-height: 1.6; }
   .sourceCard, .planCard { width: 100%; transform: none; }
   .fileTree { display: none; }
-  .sectionHeading, .workflow, .qualitiesGrid, .productGrid { grid-template-columns: 1fr; }
+  .sectionHeading, .workflow, .qualitiesGrid { grid-template-columns: 1fr; }
   .sectionHeading { gap: 1.4rem; margin-bottom: 3rem; }
   .workflow::before { width: 100%; }
   .workflowStep, .workflowStep + .workflowStep { padding: 2rem 0; border-bottom: 1px solid #d9d6cd; border-left: 0; }
   .stepTop { margin-bottom: 2rem; }
   .workflowStep p { min-height: 0; }
-  .productsSection, .processSection, .ideaSection, .qualitiesSection { padding: 5rem 0; }
+  .processSection, .ideaSection, .qualitiesSection { padding: 5rem 0; }
   .stateDiagram { grid-template-columns: 1fr; }
   .stateBox { min-height: 11rem; }
   .deltaBox { width: 5.4rem; margin: -1rem auto; }
   .deltaBox::before, .deltaBox::after { display: none; }
   .quality { min-height: auto; }
   .quality h3 { margin-top: 2.5rem; }
-  .finalCta { align-items: stretch; flex-direction: column; }
 }
 
 [data-theme='dark'] .page { --paper: #0c1920; --ink: #eff4f4; }
-[data-theme='dark'] .productsSection, [data-theme='dark'] .processSection, [data-theme='dark'] .qualitiesSection { background: #0c1920; }
-[data-theme='dark'] .sectionHeading > p:last-child, [data-theme='dark'] .workflowStep p, [data-theme='dark'] .quality p { color: #9eb0b8; }
+[data-theme='dark'] .processSection, [data-theme='dark'] .qualitiesSection { background: #0c1920; }
+[data-theme='dark'] .workflowStep p, [data-theme='dark'] .quality p { color: #9eb0b8; }
 [data-theme='dark'] .workflow, [data-theme='dark'] .workflowStep + .workflowStep, [data-theme='dark'] .finalCta { border-color: #2c4049; }
 [data-theme='dark'] .workflowStep code { border-color: #34505c; color: #d6e2e7; }
 [data-theme='dark'] .qualitiesGrid { border-color: #2c4049; background: #2c4049; }
 [data-theme='dark'] .quality { background: #10212a; }
-[data-theme='dark'] .productCard { border-color: #2c4049; background: #10212a; }
-[data-theme='dark'] .productCard > p, [data-theme='dark'] .productLinks > a:last-child { color: #9eb0b8; }
-[data-theme='dark'] .productMeta code { border-color: #34505c; }

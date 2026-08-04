@@ -10,6 +10,7 @@ The standalone release histories remain in `products/pgpac/CHANGELOG.md` and `pr
 
 - Unified pgpac and d1pac under global Starpac versions with automatic partial artifact publishing.
 - Consolidated the documentation into one version history and one website version selector.
+- Simplified the homepage and aligned the pgpac and d1pac primary actions.
 
 ### pgpac
 

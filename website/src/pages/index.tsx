@@ -27,25 +27,6 @@ const workflow = [
   },
 ];
 
-const products = [
-  {
-    name: 'pgpac',
-    platform: 'PostgreSQL',
-    extension: '.pgpkg',
-    description: 'Package, compare, and safely apply a desired PostgreSQL schema with a Go-native CLI.',
-    quickstart: '/docs/pgpac/learn/quickstart',
-    reference: '/docs/pgpac/reference/project-file',
-  },
-  {
-    name: 'd1pac',
-    platform: 'Cloudflare D1',
-    extension: '.d1pkg',
-    description: 'Bring the same desired-state delivery loop to D1 while respecting SQLite semantics.',
-    quickstart: '/docs/d1pac/learn/quickstart',
-    reference: '/docs/d1pac/reference/project-file',
-  },
-];
-
 const qualities = [
   ['SQL stays SQL', 'No proprietary schema language. Your database definition remains readable by people and its native engine.'],
   ['Drift is visible', 'The live target is part of every comparison, so a plan starts from reality—not an assumption.'],
@@ -86,8 +67,8 @@ export default function Home() {
                 <Link className={styles.primaryAction} to="/docs/pgpac/learn/quickstart">
                   Start with pgpac <ArrowIcon />
                 </Link>
-                <Link className={styles.secondaryAction} to="/docs/d1pac/learn/quickstart">
-                  Start with d1pac
+                <Link className={styles.primaryAction} to="/docs/d1pac/learn/quickstart">
+                  Start with d1pac <ArrowIcon />
                 </Link>
               </div>
               <p className={styles.dacpacNote}>
@@ -148,38 +129,11 @@ export default function Home() {
           <div className={styles.heroRule} />
         </section>
 
-        <section className={styles.productsSection}>
-          <div className="container">
-            <div className={styles.sectionHeading}>
-              <p className={styles.kicker}>Two tools, equal footing</p>
-              <Heading as="h2">Choose your database.</Heading>
-              <p>Each tool keeps its own CLI, package format, and documentation while sharing one Starpac release history.</p>
-            </div>
-            <div className={styles.productGrid}>
-              {products.map((product) => (
-                <article className={styles.productCard} key={product.name}>
-                  <div className={styles.productMeta}>
-                    <span>{product.platform}</span>
-                    <code>{product.extension}</code>
-                  </div>
-                  <Heading as="h3">{product.name}</Heading>
-                  <p>{product.description}</p>
-                  <div className={styles.productLinks}>
-                    <Link className={styles.textLink} to={product.quickstart}>Quickstart <ArrowIcon /></Link>
-                    <Link to={product.reference}>Reference</Link>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
         <section className={styles.processSection}>
           <div className="container">
             <div className={styles.sectionHeading}>
               <p className={styles.kicker}>The Starpac loop</p>
               <Heading as="h2">From desired state to database update.</Heading>
-              <p>You own the destination. The selected tool works out the journey.</p>
             </div>
             <div className={styles.workflow}>
               {workflow.map((item) => (
@@ -205,8 +159,8 @@ export default function Home() {
               <p className={styles.kicker}>A familiar idea, engine-native execution</p>
               <Heading as="h2">Manage intent, not a pile of instructions.</Heading>
               <p>
-                Package a declarative model, compare it to a target, then publish the delta. The common workflow
-                stays familiar while PostgreSQL and D1 keep independent parsers, models, diff engines, and transports.
+                If you know DACPAC, the mental model will feel familiar: package a declarative database model,
+                compare it to a target, then publish the delta.
               </p>
               <Link className={styles.textLink} to="/docs/pgpac/">
                 Explore pgpac documentation <ArrowIcon />
@@ -238,9 +192,6 @@ export default function Home() {
                 <p className={styles.kicker}>Your schema already has a destination.</p>
                 <Heading as="h2">Make it the source of truth.</Heading>
               </div>
-              <Link className={styles.primaryAction} to="/docs/d1pac/learn/installation">
-                Install d1pac <ArrowIcon />
-              </Link>
             </div>
           </div>
         </section>
