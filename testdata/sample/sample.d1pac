@@ -1,0 +1,21 @@
+<D1Pac ProjectVersion="1">
+  <PropertyGroup>
+    <PackageId>SampleProject</PackageId>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Table Include="Tables/**/*.sql" />
+    <Index Include="Indexes/**/*.sql" />
+    <View Include="Views/**/*.sql" />
+    <Trigger Include="Triggers/**/*.sql" />
+  </ItemGroup>
+
+  <Target>
+    <Comparison>
+      <Ignore Type="table" Name="application_metadata" />
+    </Comparison>
+    <Plan AllowCreate="true" AllowAlter="true" AllowDrop="false" />
+    <Apply UseTransaction="true" StopOnDataLossRisk="true" />
+  </Target>
+</D1Pac>

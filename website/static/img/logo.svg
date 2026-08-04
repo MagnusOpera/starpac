@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">d1pac</title>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#071b29" />
+      <stop offset="1" stop-color="#087eac" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#background)" />
+  <path d="M27 30h34c25 0 40 13 40 34S86 98 61 98H27V30zm27 20v28h8c9 0 14-5 14-14s-5-14-14-14h-8z" fill="#f7fbfc" />
+  <path d="M80 91h22l-15 20H65l15-20z" fill="#b7f34a" />
+</svg>

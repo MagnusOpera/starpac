@@ -1,0 +1,57 @@
+name: Prepare Release
+run-name: Prepare release ${{ github.ref_name }}
+
+on:
+  push:
+    tags: ['**']
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-archive:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            label: linux-x64
+          - runner: ubuntu-24.04-arm
+            label: linux-arm64
+          - runner: macos-14
+            label: darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: make publish-all version=${{ github.ref_name }}
+      - name: Rename unsigned macOS archive
+        if: startsWith(matrix.label, 'darwin-')
+        run: mv .out/d1pac-${{ github.ref_name }}-darwin-arm64.zip .out/d1pac-${{ github.ref_name }}-darwin-arm64-unsigned.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.label }}
+          path: .out/*.zip
+          if-no-files-found: error
+          include-hidden-files: true
+
+  create-draft-release:
+    runs-on: ubuntu-latest
+    needs: build-release-archive
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: .out
+      - run: ./.github/scripts/extract-release-notes.sh "${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/release-notes.md"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: .out/*.zip
