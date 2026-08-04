@@ -1,0 +1,78 @@
+name: Prepare Release
+run-name: Prepare release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'pgpac/v*'
+      - 'd1pac/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  identify:
+    runs-on: ubuntu-latest
+    outputs:
+      tool: ${{ steps.tag.outputs.tool }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          read -r tool version < <(./.github/scripts/parse-release-tag.sh "$RELEASE_TAG")
+          echo "tool=$tool" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build-release-archive:
+    needs: identify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            label: linux-x64
+          - runner: ubuntu-24.04-arm
+            label: linux-arm64
+          - runner: macos-14
+            label: darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: make release-build tool=${{ needs.identify.outputs.tool }} version=${{ needs.identify.outputs.version }}
+      - name: Rename unsigned macOS archive
+        if: startsWith(matrix.label, 'darwin-')
+        env:
+          TOOL: ${{ needs.identify.outputs.tool }}
+          VERSION: ${{ needs.identify.outputs.version }}
+        run: mv ".out/${TOOL}-${VERSION}-darwin-arm64.zip" ".out/${TOOL}-${VERSION}-darwin-arm64-unsigned.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.label }}
+          path: .out/*.zip
+          if-no-files-found: error
+          include-hidden-files: true
+
+  create-draft-release:
+    runs-on: ubuntu-latest
+    needs: [identify, build-release-archive]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: .out
+      - run: ./.github/scripts/extract-release-notes.sh "${{ needs.identify.outputs.tool }}" "${{ needs.identify.outputs.version }}" > "${RUNNER_TEMP}/release-notes.md"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: .out/*.zip

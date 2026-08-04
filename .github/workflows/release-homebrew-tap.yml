@@ -1,0 +1,48 @@
+name: Update Homebrew Tap
+
+on:
+  workflow_call:
+    inputs:
+      ref: {required: true, type: string}
+      tool: {required: true, type: string}
+      version: {required: true, type: string}
+      dry-run: {required: false, default: true, type: boolean}
+  workflow_dispatch:
+    inputs:
+      ref: {required: true, type: string}
+      tool: {required: true, type: choice, options: [pgpac, d1pac]}
+      version: {required: true, type: string}
+      dry-run: {required: false, default: true, type: boolean}
+
+permissions:
+  contents: read
+
+jobs:
+  update-homebrew-tap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: starpac
+      - uses: actions/checkout@v4
+        with:
+          repository: magnusopera/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.PAT_HOMEBREW_TAP }}
+      - name: Generate formula
+        env:
+          STARPAC_GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./starpac/.github/scripts/generate-homebrew-tap "${{ inputs.tool }}" "${{ inputs.version }}" > "./homebrew-tap/Formula/${{ inputs.tool }}.rb"
+      - name: Commit formula
+        working-directory: homebrew-tap
+        run: |
+          git config user.name magnusopera-bot
+          git config user.email bot@magnusopera.io
+          git add "Formula/${{ inputs.tool }}.rb"
+          git diff --cached --quiet || git commit -m "Brew formula update for ${{ inputs.tool }} version ${{ inputs.version }}"
+      - name: Push formula
+        if: ${{ !inputs.dry-run }}
+        working-directory: homebrew-tap
+        run: git push origin HEAD:main
