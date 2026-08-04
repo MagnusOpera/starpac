@@ -1,0 +1,36 @@
+name: CI Main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce changelog updates
+        env:
+          REQUIRE_CHANGELOG_ALWAYS: "true"
+          ENFORCE_UNRELEASED_BULLET: "true"
+        run: .github/scripts/check-unreleased-changelog.sh
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: make release-build version=0.0.0-ci
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: make website-install
+      - run: make website-typecheck
+      - run: make website-build

@@ -1,0 +1,79 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  sign-and-notarize:
+    runs-on: macos-15
+    steps:
+      - uses: robinraju/release-downloader@v1.11
+        with:
+          tag: ${{ github.ref_name }}
+          fileName: 'd1pac-*-darwin-arm64-unsigned.zip'
+      - name: Extract binary
+        run: |
+          mkdir -p .out/darwin/arm64
+          unzip -o -d .out/darwin/arm64 d1pac-${{ github.ref_name }}-darwin-arm64-unsigned.zip
+      - uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MAC_CERT_BASE64 }}
+          p12-password: ${{ secrets.MAC_CERT_PASSWORD }}
+      - name: Sign binary
+        run: |
+          expected_identifier="io.magnusopera.d1pac.arm64"
+          codesign --force --timestamp --options=runtime \
+            --identifier "$expected_identifier" \
+            --sign "Developer ID Application: Magnus Opera (${{ secrets.MAC_DEV_TEAM_ID }})" \
+            .out/darwin/arm64/d1pac
+          codesign --verify --verbose=4 .out/darwin/arm64/d1pac
+          actual_identifier="$(codesign -dv --verbose=4 .out/darwin/arm64/d1pac 2>&1 | sed -n 's/^Identifier=//p')"
+          test "$actual_identifier" = "$expected_identifier"
+          (cd .out/darwin/arm64 && zip -q -r ../d1pac-${{ github.ref_name }}-darwin-arm64.zip ./d1pac)
+      - uses: GuillaumeFalourd/notary-tools@v1
+        timeout-minutes: 10
+        with:
+          product_path: '.out/darwin/d1pac-${{ github.ref_name }}-darwin-arm64.zip'
+          apple_id: ${{ secrets.MAC_DEV_LOGIN }}
+          password: ${{ secrets.MAC_DEV_PASSWORD }}
+          team_id: ${{ secrets.MAC_DEV_TEAM_ID }}
+          xcode_path: '/Applications/Xcode_16.4.app'
+          staple: false
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: .out/darwin/d1pac-${{ github.ref_name }}-darwin-arm64.zip
+      - name: Remove unsigned macOS artifact
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const {data: release} = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag,
+            });
+            const asset = release.assets.find(item => item.name === `d1pac-${tag}-darwin-arm64-unsigned.zip`);
+            if (asset) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: asset.id,
+              });
+            }
+
+  update-homebrew-tap:
+    needs: sign-and-notarize
+    uses: ./.github/workflows/release-homebrew-tap.yml
+    with:
+      ref: ${{ github.ref }}
+      version: ${{ github.ref_name }}
+      dry-run: false
+    secrets: inherit
