@@ -6,6 +6,9 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.6.0]
+
+
 ### Starpac
 
 - Unified pgpac and d1pac under global Starpac versions with automatic partial artifact publishing.
@@ -23,6 +26,7 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 - Moved d1pac into the Starpac monorepo while preserving its CLI, project, package, and release contracts.
 - Shared stable package, plan, rendering, project-resolution, safety, and CLI infrastructure with pgpac.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/f6c183dd832bfadb0e2bf932e9c5b24f583ebdcd...v0.6.0
 ## Standalone pgpac release history
 
 The following releases originated in the standalone `MagnusOpera/pgpac` repository. Their versions apply only to pgpac.

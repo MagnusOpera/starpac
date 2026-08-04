@@ -1,0 +1,54 @@
+{
+  "docs": [
+    {
+      "type": "category",
+      "label": "pgpac",
+      "link": {
+        "type": "doc",
+        "id": "pgpac/intro"
+      },
+      "items": [
+        "pgpac/learn/installation",
+        "pgpac/learn/quickstart",
+        {
+          "type": "category",
+          "label": "Reference",
+          "items": [
+            "pgpac/reference/project-file",
+            "pgpac/reference/build-command",
+            "pgpac/reference/plan-command",
+            "pgpac/reference/apply-command",
+            "pgpac/reference/package-format",
+            "pgpac/reference/safety-model"
+          ]
+        },
+        "pgpac/whats-new"
+      ]
+    },
+    {
+      "type": "category",
+      "label": "d1pac",
+      "link": {
+        "type": "doc",
+        "id": "d1pac/intro"
+      },
+      "items": [
+        "d1pac/learn/installation",
+        "d1pac/learn/quickstart",
+        {
+          "type": "category",
+          "label": "Reference",
+          "items": [
+            "d1pac/reference/project-file",
+            "d1pac/reference/build-command",
+            "d1pac/reference/plan-command",
+            "d1pac/reference/apply-command",
+            "d1pac/reference/package-format",
+            "d1pac/reference/safety-model"
+          ]
+        },
+        "d1pac/whats-new"
+      ]
+    }
+  ]
+}

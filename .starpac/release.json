@@ -1,0 +1,17 @@
+{
+  "version": "0.6.0",
+  "previous": null,
+  "commit": "30d441160d89f8ec3af5901a98463b03ea1d777b",
+  "artifacts": [
+    "pgpac",
+    "d1pac"
+  ],
+  "reasons": {
+    "pgpac": [
+      "initial global Starpac release"
+    ],
+    "d1pac": [
+      "initial global Starpac release"
+    ]
+  }
+}
