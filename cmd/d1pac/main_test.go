@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,32 @@ func TestRunBuildCreatesPackage(t *testing.T) {
 	})
 	if !strings.Contains(output, filepath.Join(outputDirectory, "SampleProject.d1pkg")) {
 		t.Fatalf("unexpected build output: %q", output)
+	}
+}
+
+func TestTargetFlagsRetainExplicitValues(t *testing.T) {
+	flags := flag.NewFlagSet("target", flag.ContinueOnError)
+	target := addTargetFlags(flags)
+	if err := flags.Parse([]string{
+		"--account-id", "account-id",
+		"--database", "database-id",
+		"--api-token", "api-token",
+		"--api-base-url", "https://api.example.test",
+	}); err != nil {
+		t.Fatalf("parse target flags: %v", err)
+	}
+
+	if target.accountID != "account-id" {
+		t.Fatalf("unexpected account id: %q", target.accountID)
+	}
+	if target.database != "database-id" {
+		t.Fatalf("unexpected database: %q", target.database)
+	}
+	if target.apiToken != "api-token" {
+		t.Fatalf("unexpected API token: %q", target.apiToken)
+	}
+	if target.apiBaseURL != "https://api.example.test" {
+		t.Fatalf("unexpected API base URL: %q", target.apiBaseURL)
 	}
 }
 

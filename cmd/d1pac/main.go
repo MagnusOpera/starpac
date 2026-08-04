@@ -178,8 +178,8 @@ func runApply(ctx context.Context, arguments []string) error {
 	return nil
 }
 
-func addTargetFlags(flags *flag.FlagSet) targetFlags {
-	target := targetFlags{}
+func addTargetFlags(flags *flag.FlagSet) *targetFlags {
+	target := &targetFlags{}
 	flags.StringVar(&target.accountID, "account-id", os.Getenv("CLOUDFLARE_ACCOUNT_ID"), "Cloudflare account id; defaults to CLOUDFLARE_ACCOUNT_ID")
 	flags.StringVar(&target.database, "database", "", "D1 database name or UUID")
 	flags.StringVar(&target.apiToken, "api-token", os.Getenv("CLOUDFLARE_API_TOKEN"), "Cloudflare API token; defaults to CLOUDFLARE_API_TOKEN")
@@ -187,7 +187,7 @@ func addTargetFlags(flags *flag.FlagSet) targetFlags {
 	return target
 }
 
-func newTargetClient(target targetFlags) (*cloudflare.Client, error) {
+func newTargetClient(target *targetFlags) (*cloudflare.Client, error) {
 	return cloudflare.New(cloudflare.Config{
 		AccountID: target.accountID,
 		Database:  target.database,

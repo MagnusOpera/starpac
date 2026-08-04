@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed explicit Cloudflare target flags being discarded by `plan` and `apply`.
+
 ## [0.0.1]
 
 
