@@ -59,11 +59,31 @@ if actual != expected:
 PY
 }
 
+assert_product_version() {
+  local product="$1"
+  local expected="$2"
+  python3 - "$repository/.starpac/release-index.json" "$product" "$expected" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    index = json.load(source)
+
+product = sys.argv[2]
+expected = sys.argv[3]
+actual = index["products"][product]
+if actual != {"version": expected, "tag": f"v{expected}"}:
+    raise SystemExit(f"{product} index {actual!r}, expected version {expected!r}")
+PY
+}
+
 (
   cd "$repository"
   PATH="$repository/bin:$PATH" ./.github/scripts/release.sh 0.6.0
 )
 assert_artifacts "pgpac,d1pac"
+assert_product_version pgpac 0.6.0
+assert_product_version d1pac 0.6.0
 git -C "$repository" rev-parse --verify --quiet refs/tags/v0.6.0 >/dev/null
 test "$(git -C "$repository" log -1 --format=%s)" = "chore(release): 0.6.0"
 
@@ -73,6 +93,8 @@ add_change "internal/d1/introspect/change.go" "Changed only d1pac."
   PATH="$repository/bin:$PATH" ./.github/scripts/release.sh 0.6.1
 )
 assert_artifacts "d1pac"
+assert_product_version pgpac 0.6.0
+assert_product_version d1pac 0.6.1
 
 add_change "internal/pac/render/change.go" "Changed shared runtime behavior."
 (
@@ -80,6 +102,8 @@ add_change "internal/pac/render/change.go" "Changed shared runtime behavior."
   PATH="$repository/bin:$PATH" ./.github/scripts/release.sh 0.6.2
 )
 assert_artifacts "pgpac,d1pac"
+assert_product_version pgpac 0.6.2
+assert_product_version d1pac 0.6.2
 
 add_change "website/docs/change.md" "Changed only documentation."
 (
@@ -87,6 +111,8 @@ add_change "website/docs/change.md" "Changed only documentation."
   PATH="$repository/bin:$PATH" ./.github/scripts/release.sh 0.6.3
 )
 assert_artifacts ""
+assert_product_version pgpac 0.6.2
+assert_product_version d1pac 0.6.2
 
 grep -q '^## \[0.6.3\]$' "$repository/CHANGELOG.md"
 grep -q '^\*\*Full Changelog\*\*:' "$repository/CHANGELOG.md"

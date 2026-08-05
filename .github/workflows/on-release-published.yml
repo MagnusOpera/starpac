@@ -32,6 +32,7 @@ jobs:
         run: |
           version="$(./.github/scripts/parse-release-tag.sh "$RELEASE_TAG")"
           test "$(jq -r .version .starpac/release.json)" = "$version"
+          test "$(jq -r .starpacVersion .starpac/release-index.json)" = "$version"
           artifacts="$(jq -c .artifacts .starpac/release.json)"
           count="$(jq '.artifacts | length' .starpac/release.json)"
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"

@@ -33,6 +33,7 @@ def classify(path: str) -> Tuple[str, ...]:
             "products/d1pac/CHANGELOG.md",
             "products/d1pac/README.md",
             ".starpac/release.json",
+            ".starpac/release-index.json",
         }
     )
     if documentation_only:

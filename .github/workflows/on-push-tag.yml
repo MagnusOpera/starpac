@@ -79,10 +79,13 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           body_path: ${{ runner.temp }}/release-notes.md
-          files: .out/*.zip
+          files: |
+            .starpac/release-index.json
+            .out/*.zip
       - uses: softprops/action-gh-release@v2
         if: needs.identify.outputs.has-artifacts != 'true'
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
           body_path: ${{ runner.temp }}/release-notes.md
+          files: .starpac/release-index.json

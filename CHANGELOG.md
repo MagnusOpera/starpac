@@ -6,6 +6,10 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### Starpac
+
+- Published a cumulative product release index so consumers can discover each tool's latest artifact-bearing release.
+
 ## [0.6.2]
 
 

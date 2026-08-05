@@ -33,9 +33,10 @@ fi
 
 previous_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1 || true)
 manifest_file="$(mktemp)"
+index_file="$(mktemp)"
 body_file="$(mktemp)"
 updated_changelog="$(mktemp)"
-cleanup() { rm -f "$manifest_file" "$body_file" "$updated_changelog"; }
+cleanup() { rm -f "$manifest_file" "$index_file" "$body_file" "$updated_changelog"; }
 trap cleanup EXIT
 
 if [[ -n "$previous_tag" ]]; then
@@ -46,6 +47,41 @@ else
   compare_ref="f6c183dd832bfadb0e2bf932e9c5b24f583ebdcd"
 fi
 artifacts=$(python3 -c 'import json,sys; print(", ".join(json.load(sys.stdin)["artifacts"]) or "none")' < "$manifest_file")
+python3 - "$version" "$manifest_file" .starpac/release-index.json > "$index_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+manifest_path = Path(sys.argv[2])
+previous_index_path = Path(sys.argv[3])
+
+with manifest_path.open(encoding="utf-8") as source:
+    manifest = json.load(source)
+
+products = {}
+if previous_index_path.exists():
+    with previous_index_path.open(encoding="utf-8") as source:
+        previous_index = json.load(source)
+    products.update(previous_index.get("products", {}))
+
+for product in manifest["artifacts"]:
+    products[product] = {
+        "version": version,
+        "tag": f"v{version}",
+    }
+
+json.dump(
+    {
+        "schemaVersion": 1,
+        "starpacVersion": version,
+        "products": products,
+    },
+    sys.stdout,
+    indent=2,
+)
+sys.stdout.write("\n")
+PY
 compare_link="**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/${compare_ref}...${tag}"
 
 if [[ "$dryrun" == "true" ]]; then
@@ -53,6 +89,8 @@ if [[ "$dryrun" == "true" ]]; then
   echo "[DRY RUN] Previous release: ${previous_tag:-none (full baseline)}"
   echo "[DRY RUN] Binary artifacts: ${artifacts}"
   python3 -m json.tool "$manifest_file"
+  echo "[DRY RUN] Product release index:"
+  python3 -m json.tool "$index_file"
   echo "[DRY RUN] ${compare_link}"
   exit 0
 fi
@@ -78,6 +116,7 @@ mv "$updated_changelog" CHANGELOG.md
 
 mkdir -p .starpac
 cp "$manifest_file" .starpac/release.json
+cp "$index_file" .starpac/release-index.json
 (
   cd website
   rm -rf node_modules/.cache
@@ -85,7 +124,7 @@ cp "$manifest_file" .starpac/release.json
   npm run version-docs -- "$version"
   STARPAC_DOCS_LAST_VERSION="$version" npm run build
 )
-git add CHANGELOG.md .starpac/release.json website
+git add CHANGELOG.md .starpac/release.json .starpac/release-index.json website
 git commit -m "chore(release): ${version}"
 git tag -a "$tag" -m "Release ${version}"
 echo "Release ${version} prepared locally with binary artifacts: ${artifacts}."
