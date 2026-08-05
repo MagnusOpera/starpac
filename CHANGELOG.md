@@ -6,10 +6,14 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.6.3]
+
+
 ### Starpac
 
 - Published a cumulative product release index so consumers can discover each tool's latest artifact-bearing release.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.6.2...v0.6.3
 ## [0.6.2]
 
 
