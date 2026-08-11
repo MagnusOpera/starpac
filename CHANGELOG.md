@@ -12,6 +12,8 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
   made blocked PostgreSQL plans report their unsupported status.
 - Added native row-preserving plans for column type, default, and nullability
   changes and for primary-key additions, removals, and replacements.
+- Added semantic diffing and native row-preserving alterations for named and
+  unnamed foreign-key, unique, and check constraints.
 - Documented additive and destructive schema behavior, authorization, and the
   remaining table and constraint diffing limitations.
 

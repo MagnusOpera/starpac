@@ -233,3 +233,125 @@ func TestBuildPlanReplacesPrimaryKeyWithoutRecreatingTable(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPlanTreatsEquivalentInlineAndNamedConstraintsAsEqual(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL: `CREATE TABLE app.widgets (
+			id uuid PRIMARY KEY,
+			parent_id uuid REFERENCES app.parents(id) ON DELETE CASCADE,
+			code text UNIQUE,
+			quantity integer CHECK (quantity > 0)
+		)`,
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL: `CREATE TABLE "app"."widgets" (
+			"id" uuid NOT NULL,
+			"parent_id" uuid,
+			"code" text,
+			"quantity" integer,
+			CONSTRAINT "widgets_pkey" PRIMARY KEY (id),
+			CONSTRAINT "widgets_parent_id_fkey" FOREIGN KEY (parent_id) REFERENCES app.parents(id) ON DELETE CASCADE,
+			CONSTRAINT "widgets_code_key" UNIQUE (code),
+			CONSTRAINT "widgets_quantity_check" CHECK ((quantity > 0))
+		)`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 0 {
+		t.Fatalf("equivalent constraints produced operations: %#v", plan.Operations)
+	}
+}
+
+func TestBuildPlanAddsForeignKeyUniqueAndCheckConstraintsNatively(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL: `CREATE TABLE app.widgets (
+			id uuid PRIMARY KEY,
+			parent_id uuid,
+			code text,
+			quantity integer,
+			CONSTRAINT widgets_parent_fkey FOREIGN KEY (parent_id) REFERENCES app.parents(id),
+			CONSTRAINT widgets_code_key UNIQUE (code),
+			CONSTRAINT widgets_quantity_check CHECK (quantity > 0)
+		)`,
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL: `CREATE TABLE "app"."widgets" (
+			"id" uuid NOT NULL,
+			"parent_id" uuid,
+			"code" text,
+			"quantity" integer,
+			CONSTRAINT "widgets_pkey" PRIMARY KEY (id)
+		)`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 3 {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	for _, operation := range plan.Operations {
+		if operation.Kind != "alter-table-add-constraint" || operation.Risk != "migration" {
+			t.Fatalf("unexpected constraint operation: %#v", operation)
+		}
+		if !strings.HasPrefix(operation.SQL, `ALTER TABLE "app"."widgets" ADD CONSTRAINT`) || strings.Contains(operation.SQL, "DROP TABLE") {
+			t.Fatalf("constraint was not added natively: %s", operation.SQL)
+		}
+	}
+}
+
+func TestBuildPlanReplacesAndDropsConstraintsBeforeAddingDesiredDefinitions(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL: `CREATE TABLE app.widgets (
+			id uuid PRIMARY KEY,
+			parent_id uuid,
+			code text,
+			quantity integer,
+			CONSTRAINT widgets_parent_fkey FOREIGN KEY (parent_id) REFERENCES app.parents(id) ON DELETE CASCADE,
+			CONSTRAINT widgets_code_key UNIQUE (code, parent_id),
+			CONSTRAINT widgets_quantity_check CHECK (quantity >= 0)
+		)`,
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL: `CREATE TABLE "app"."widgets" (
+			"id" uuid NOT NULL,
+			"parent_id" uuid,
+			"code" text,
+			"quantity" integer,
+			CONSTRAINT "widgets_pkey" PRIMARY KEY (id),
+			CONSTRAINT "widgets_parent_fkey" FOREIGN KEY (parent_id) REFERENCES app.parents(id),
+			CONSTRAINT "widgets_code_key" UNIQUE (code),
+			CONSTRAINT "widgets_quantity_check" CHECK ((quantity > 0))
+		)`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 6 {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	for index, operation := range plan.Operations {
+		wantKind := "alter-table-drop-constraint"
+		if index >= 3 {
+			wantKind = "alter-table-add-constraint"
+		}
+		if operation.Kind != wantKind || operation.Risk != "migration" || strings.Contains(operation.SQL, "DROP TABLE") {
+			t.Fatalf("operation %d = %#v, want native %s", index, operation, wantKind)
+		}
+	}
+	if plan.Summary.Destructive || !plan.Summary.Supported {
+		t.Fatalf("unexpected plan safety metadata: %#v", plan.Summary)
+	}
+}

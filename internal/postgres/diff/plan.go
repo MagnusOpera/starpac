@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
+
 	sharedplan "github.com/MagnusOpera/starpac/internal/pac/plan"
 	"github.com/MagnusOpera/starpac/internal/postgres/model"
 	"github.com/MagnusOpera/starpac/internal/postgres/project"
@@ -364,6 +366,8 @@ func weight(kind string) int {
 		return 30
 	case strings.Contains(kind, "drop-table"):
 		return 40
+	case strings.Contains(kind, "drop-constraint"):
+		return 41
 	case strings.Contains(kind, "drop-primary-key"):
 		return 41
 	case strings.Contains(kind, "drop-column-default"):
@@ -377,6 +381,8 @@ func weight(kind string) int {
 	case strings.Contains(kind, "add-column"):
 		return 46
 	case strings.Contains(kind, "add-primary-key"):
+		return 47
+	case strings.Contains(kind, "add-constraint"):
 		return 47
 	case strings.Contains(kind, "drop-column"):
 		return 48
@@ -498,14 +504,22 @@ type tableShape struct {
 	Columns        []tableColumnShape
 	PrimaryKey     []string
 	PrimaryKeyName string
+	Constraints    []tableConstraintShape
+}
+
+type tableConstraintShape struct {
+	Name       string
+	Kind       string
+	Definition string
+	Semantic   string
 }
 
 func tableEqual(a, b model.TableDef) bool {
-	desired, ok := parseCreateTableShape(a.SQL)
+	desired, ok := parseCreateTableShape(a.SQL, a.Schema)
 	if !ok {
 		return a.SQL == b.SQL
 	}
-	actual, ok := parseCreateTableShape(b.SQL)
+	actual, ok := parseCreateTableShape(b.SQL, b.Schema)
 	if !ok {
 		return a.SQL == b.SQL
 	}
@@ -513,11 +527,11 @@ func tableEqual(a, b model.TableDef) bool {
 }
 
 func alterTableOps(desiredItem, actualItem model.TableDef) ([]Operation, bool) {
-	desired, ok := parseCreateTableShape(desiredItem.SQL)
+	desired, ok := parseCreateTableShape(desiredItem.SQL, desiredItem.Schema)
 	if !ok {
 		return nil, false
 	}
-	actual, ok := parseCreateTableShape(actualItem.SQL)
+	actual, ok := parseCreateTableShape(actualItem.SQL, actualItem.Schema)
 	if !ok {
 		return nil, false
 	}
@@ -533,6 +547,11 @@ func alterTableOps(desiredItem, actualItem model.TableDef) ([]Operation, bool) {
 	}
 
 	var operations []Operation
+	constraintOperations, ok := alterConstraintOps(tableKey, tableSQL, desired.Constraints, actual.Constraints)
+	if !ok {
+		return nil, false
+	}
+	operations = append(operations, constraintOperations...)
 	if !primaryKeyEqual(desired, actual) && len(actual.PrimaryKey) > 0 {
 		constraintName := actual.PrimaryKeyName
 		if constraintName == "" {
@@ -605,6 +624,62 @@ func alterTableOps(desiredItem, actualItem model.TableDef) ([]Operation, bool) {
 				tableSQL,
 				quoteQName(actualColumn.Name),
 			),
+		))
+	}
+	return operations, true
+}
+
+func alterConstraintOps(tableKey, tableSQL string, desired, actual []tableConstraintShape) ([]Operation, bool) {
+	matchedActual := make([]bool, len(actual))
+	matchedDesired := make([]bool, len(desired))
+	for desiredIndex, desiredConstraint := range desired {
+		for actualIndex, actualConstraint := range actual {
+			if matchedActual[actualIndex] || desiredConstraint.Kind != actualConstraint.Kind || desiredConstraint.Semantic != actualConstraint.Semantic {
+				continue
+			}
+			if desiredConstraint.Name != "" && desiredConstraint.Name != actualConstraint.Name {
+				continue
+			}
+			matchedDesired[desiredIndex] = true
+			matchedActual[actualIndex] = true
+			break
+		}
+	}
+
+	var operations []Operation
+	for index, constraint := range actual {
+		if matchedActual[index] {
+			continue
+		}
+		if constraint.Name == "" {
+			return nil, false
+		}
+		operations = append(operations, op(
+			"alter-table-drop-constraint",
+			"constraint",
+			tableKey+"."+constraint.Name,
+			"migration",
+			fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s;", tableSQL, quoteQName(constraint.Name)),
+		))
+	}
+	for index, constraint := range desired {
+		if matchedDesired[index] {
+			continue
+		}
+		definition := constraint.Definition
+		if constraint.Name != "" {
+			definition = "CONSTRAINT " + quoteQName(constraint.Name) + " " + definition
+		}
+		objectName := constraint.Name
+		if objectName == "" {
+			objectName = constraint.Kind + ":" + constraint.Semantic
+		}
+		operations = append(operations, op(
+			"alter-table-add-constraint",
+			"constraint",
+			tableKey+"."+objectName,
+			"migration",
+			fmt.Sprintf("ALTER TABLE %s ADD %s;", tableSQL, definition),
 		))
 	}
 	return operations, true
@@ -700,11 +775,36 @@ func containsIdentifier(items []string, candidate string) bool {
 }
 
 func tableShapeEqual(a, b tableShape) bool {
-	if !primaryKeyEqual(a, b) || len(a.Columns) != len(b.Columns) {
+	if !primaryKeyEqual(a, b) || !constraintsEqual(a.Constraints, b.Constraints) || len(a.Columns) != len(b.Columns) {
 		return false
 	}
 	for i := range a.Columns {
 		if !tableColumnEqual(a.Columns[i], b.Columns[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func constraintsEqual(desired, actual []tableConstraintShape) bool {
+	if len(desired) != len(actual) {
+		return false
+	}
+	matched := make([]bool, len(actual))
+	for _, desiredConstraint := range desired {
+		found := false
+		for index, actualConstraint := range actual {
+			if matched[index] || desiredConstraint.Kind != actualConstraint.Kind || desiredConstraint.Semantic != actualConstraint.Semantic {
+				continue
+			}
+			if desiredConstraint.Name != "" && desiredConstraint.Name != actualConstraint.Name {
+				continue
+			}
+			matched[index] = true
+			found = true
+			break
+		}
+		if !found {
 			return false
 		}
 	}
@@ -718,7 +818,7 @@ func tableColumnEqual(a, b tableColumnShape) bool {
 		a.NotNull == b.NotNull
 }
 
-func parseCreateTableShape(sql string) (tableShape, bool) {
+func parseCreateTableShape(sql, schema string) (tableShape, bool) {
 	up := strings.ToUpper(sql)
 	start := strings.Index(up, "CREATE TABLE")
 	if start == -1 {
@@ -753,7 +853,198 @@ func parseCreateTableShape(sql string) (tableShape, bool) {
 			shape.PrimaryKeyName = name
 		}
 	}
+	constraints, ok := parseNonPrimaryConstraints(sql, schema, open+1, close)
+	if !ok {
+		return tableShape{}, false
+	}
+	shape.Constraints = constraints
 	return shape, true
+}
+
+func parseNonPrimaryConstraints(sql, schema string, bodyStart, bodyEnd int) ([]tableConstraintShape, bool) {
+	tree, err := pg_query.Parse(sql)
+	if err != nil || len(tree.Stmts) != 1 || tree.Stmts[0].Stmt.GetCreateStmt() == nil {
+		return nil, false
+	}
+	elements := tree.Stmts[0].Stmt.GetCreateStmt().GetTableElts()
+	ranges := splitTopLevelCommaRanges(sql[bodyStart:bodyEnd])
+	if len(elements) != len(ranges) {
+		return nil, false
+	}
+
+	var result []tableConstraintShape
+	for elementIndex, element := range elements {
+		bounds := ranges[elementIndex]
+		bounds[0] += bodyStart
+		bounds[1] += bodyStart
+		columnName := ""
+		var nodes []*pg_query.Node
+		if column := element.GetColumnDef(); column != nil {
+			columnName = column.GetColname()
+			nodes = column.GetConstraints()
+		} else if constraint := element.GetConstraint(); constraint != nil {
+			nodes = []*pg_query.Node{element}
+		}
+		for nodeIndex, node := range nodes {
+			constraint := node.GetConstraint()
+			kind := constraintKind(constraint)
+			if kind == "" || kind == "primary-key" {
+				continue
+			}
+			start := int(constraint.GetLocation())
+			if start < bounds[0] || start >= bounds[1] {
+				return nil, false
+			}
+			end := bounds[1]
+			for _, laterNode := range nodes[nodeIndex+1:] {
+				later := laterNode.GetConstraint()
+				if later == nil {
+					continue
+				}
+				location := int(later.GetLocation())
+				if location > start && location < end {
+					end = location
+					break
+				}
+			}
+			_, definition := stripConstraintName(strings.TrimSpace(sql[start:end]))
+			definition = tableConstraintDefinition(kind, definition, columnName, constraint)
+			if definition == "" {
+				return nil, false
+			}
+			result = append(result, tableConstraintShape{
+				Name:       constraint.GetConname(),
+				Kind:       kind,
+				Definition: definition,
+				Semantic:   normalizeConstraintSemantic(kind, definition, schema),
+			})
+		}
+	}
+	return result, true
+}
+
+func constraintKind(constraint *pg_query.Constraint) string {
+	if constraint == nil {
+		return ""
+	}
+	switch constraint.GetContype() {
+	case pg_query.ConstrType_CONSTR_PRIMARY:
+		return "primary-key"
+	case pg_query.ConstrType_CONSTR_FOREIGN:
+		return "foreign-key"
+	case pg_query.ConstrType_CONSTR_UNIQUE:
+		return "unique"
+	case pg_query.ConstrType_CONSTR_CHECK:
+		return "check"
+	default:
+		return ""
+	}
+}
+
+func stripConstraintName(definition string) (string, string) {
+	definition = strings.TrimSpace(definition)
+	if !strings.HasPrefix(strings.ToUpper(definition), "CONSTRAINT ") {
+		return "", definition
+	}
+	name, rest, ok := cutIdentifier(strings.TrimSpace(definition[len("CONSTRAINT "):]))
+	if !ok {
+		return "", definition
+	}
+	return normalizeIdentifier(name), strings.TrimSpace(rest)
+}
+
+func tableConstraintDefinition(kind, definition, columnName string, constraint *pg_query.Constraint) string {
+	definition = strings.TrimSpace(definition)
+	if columnName == "" {
+		return definition
+	}
+	switch kind {
+	case "unique":
+		result := "UNIQUE"
+		if constraint.GetNullsNotDistinct() {
+			result += " NULLS NOT DISTINCT"
+		}
+		result += " (" + quoteQName(columnName) + ")"
+		return result + constraintTiming(constraint)
+	case "foreign-key":
+		return "FOREIGN KEY (" + quoteQName(columnName) + ") " + definition
+	case "check":
+		return definition
+	default:
+		return ""
+	}
+}
+
+func constraintTiming(constraint *pg_query.Constraint) string {
+	if !constraint.GetDeferrable() {
+		return ""
+	}
+	if constraint.GetInitdeferred() {
+		return " DEFERRABLE INITIALLY DEFERRED"
+	}
+	return " DEFERRABLE INITIALLY IMMEDIATE"
+}
+
+func normalizeConstraintSemantic(kind, definition, schema string) string {
+	definition = strings.TrimSpace(definition)
+	if kind == "check" {
+		upper := strings.ToUpper(definition)
+		if index := strings.Index(upper, "CHECK"); index >= 0 {
+			expression := strings.TrimSpace(definition[index+len("CHECK"):])
+			expression = stripOuterParentheses(expression)
+			definition = "CHECK(" + expression + ")"
+		}
+	}
+	result := compactConstraintSQL(definition)
+	if kind == "foreign-key" && schema != "" {
+		result = strings.Replace(result, "references"+strings.ToLower(schema)+".", "references", 1)
+	}
+	return result
+}
+
+func stripOuterParentheses(expression string) string {
+	expression = strings.TrimSpace(expression)
+	for len(expression) >= 2 && expression[0] == '(' {
+		close := findMatchingParen(expression, 0)
+		if close != len(expression)-1 {
+			break
+		}
+		expression = strings.TrimSpace(expression[1:close])
+	}
+	return expression
+}
+
+func compactConstraintSQL(sql string) string {
+	var result strings.Builder
+	inSingle := false
+	for index := 0; index < len(sql); index++ {
+		character := sql[index]
+		if inSingle {
+			result.WriteByte(character)
+			if character == '\'' {
+				if index+1 < len(sql) && sql[index+1] == '\'' {
+					index++
+					result.WriteByte(sql[index])
+					continue
+				}
+				inSingle = false
+			}
+			continue
+		}
+		if character == '\'' {
+			inSingle = true
+			result.WriteByte(character)
+			continue
+		}
+		if character == '"' || character == ' ' || character == '\t' || character == '\n' || character == '\r' {
+			continue
+		}
+		if character >= 'A' && character <= 'Z' {
+			character += 'a' - 'A'
+		}
+		result.WriteByte(character)
+	}
+	return result.String()
 }
 
 func parseTableColumn(fragment string) (tableColumnShape, bool, bool) {
@@ -769,9 +1060,13 @@ func parseTableColumn(fragment string) (tableColumnShape, bool, bool) {
 	defaultIdx := findTopLevelKeyword(upperRest, " DEFAULT ")
 	notNullIdx := findTopLevelKeyword(upperRest, " NOT NULL")
 	primaryKeyIdx := findTopLevelKeyword(upperRest, " PRIMARY KEY")
+	uniqueIdx := findTopLevelKeyword(upperRest, " UNIQUE")
+	referencesIdx := findTopLevelKeyword(upperRest, " REFERENCES")
+	checkIdx := findTopLevelKeyword(upperRest, " CHECK")
+	constraintIdx := findTopLevelKeyword(upperRest, " CONSTRAINT")
 
 	endType := len(rest)
-	for _, idx := range []int{defaultIdx, notNullIdx, primaryKeyIdx} {
+	for _, idx := range []int{defaultIdx, notNullIdx, primaryKeyIdx, uniqueIdx, referencesIdx, checkIdx, constraintIdx} {
 		if idx >= 0 && idx < endType {
 			endType = idx
 		}
@@ -785,7 +1080,7 @@ func parseTableColumn(fragment string) (tableColumnShape, bool, bool) {
 	}
 	if defaultIdx >= 0 {
 		endDefault := len(rest)
-		for _, idx := range []int{notNullIdx, primaryKeyIdx} {
+		for _, idx := range []int{notNullIdx, primaryKeyIdx, uniqueIdx, referencesIdx, checkIdx, constraintIdx} {
 			if idx >= 0 && idx > defaultIdx && idx < endDefault {
 				endDefault = idx
 			}
@@ -926,7 +1221,16 @@ func findMatchingParen(s string, open int) int {
 }
 
 func splitTopLevelCommaList(s string) []string {
-	var parts []string
+	ranges := splitTopLevelCommaRanges(s)
+	parts := make([]string, 0, len(ranges))
+	for _, bounds := range ranges {
+		parts = append(parts, strings.TrimSpace(s[bounds[0]:bounds[1]]))
+	}
+	return parts
+}
+
+func splitTopLevelCommaRanges(s string) [][2]int {
+	var ranges [][2]int
 	start := 0
 	depth := 0
 	inSingle := false
@@ -955,13 +1259,13 @@ func splitTopLevelCommaList(s string) []string {
 			}
 		case ',':
 			if !inSingle && !inDouble && depth == 0 {
-				parts = append(parts, strings.TrimSpace(s[start:i]))
+				ranges = append(ranges, [2]int{start, i})
 				start = i + 1
 			}
 		}
 	}
-	parts = append(parts, strings.TrimSpace(s[start:]))
-	return parts
+	ranges = append(ranges, [2]int{start, len(s)})
+	return ranges
 }
 
 func findTopLevelKeyword(upper, keyword string) int {

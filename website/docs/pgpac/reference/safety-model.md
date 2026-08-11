@@ -30,11 +30,20 @@ The following changes use native `ALTER TABLE` operations and preserve rows:
 - changing a column type with an explicit `USING column::new_type` conversion
 - adding `NOT NULL`
 - adding, removing, renaming, or changing the columns of a primary key
+- adding, removing, renaming, or changing `FOREIGN KEY`, `UNIQUE`, and `CHECK`
+  constraints
 
 These operations are classified as migrations. They do not require drop
 authorization, but PostgreSQL can reject them when existing values cannot be
-cast, contain nulls, are not unique, or violate another dependency. pgpac does
-not infer a custom data-conversion expression.
+cast, contain nulls, are not unique, fail a check, lack a referenced key, or
+violate another dependency. pgpac does not infer a custom data-conversion
+expression.
+
+Named constraints are matched by name and semantic definition. An unnamed
+constraint in the desired SQL matches an equivalent target constraint without
+depending on PostgreSQL's generated name. Constraint replacement drops the old
+named constraint before adding and validating the desired definition; it does
+not recreate the table.
 
 ## Destructive operations
 
@@ -52,14 +61,13 @@ unplanned dependency.
 
 ## Current table-change limitations
 
-Column additions, removals, type changes, defaults, nullability, and primary
-keys are incremental. A column rename is not inferred: it is represented as an
-addition and a destructive removal, so the old column's values are not copied.
+Column additions, removals, type changes, defaults, nullability, primary keys,
+foreign keys, unique constraints, and check constraints are incremental. A
+column rename is not inferred: it is represented as an addition and a
+destructive removal, so the old column's values are not copied.
 
-Table-level `FOREIGN KEY`, `UNIQUE`, and `CHECK` constraints are not yet modeled
-independently. Some constraint-only changes may therefore be missed rather than
-planned. Use an explicit, reviewed migration until first-class constraint
-diffing is available.
+PostgreSQL exclusion constraints are not yet modeled independently. Use an
+explicit, reviewed migration for those changes.
 
 If pgpac cannot parse a table shape into supported native alterations, it can
 still fall back to dropping and recreating the complete table. That fallback
