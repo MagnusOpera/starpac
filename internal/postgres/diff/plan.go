@@ -20,6 +20,13 @@ type Plan = sharedplan.Plan
 type Summary = sharedplan.Summary
 type Operation = sharedplan.Operation
 
+type planPermission int
+
+const (
+	permissionCreate planPermission = iota
+	permissionAlter
+)
+
 func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, options Options) Plan {
 	var ops []Operation
 
@@ -37,6 +44,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.SchemaDef) bool { return true },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -53,6 +61,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.ExtensionDef) bool { return extensionEqual(a, b) },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffTables(project, desired.Tables, actual.Tables, &ops, options)
@@ -71,6 +80,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.IndexDef) bool { return a.SQL == b.SQL },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -87,6 +97,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.ViewDef) bool { return viewEqual(a, b) },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -103,6 +114,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.RoutineDef) bool { return routineEqual(a, b) },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -119,6 +131,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.EnumDef) bool { return enumEqual(a, b) },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -135,6 +148,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.DomainDef) bool { return domainEqual(a, b) },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -151,6 +165,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.SequenceDef) bool { return a.SQL == b.SQL },
 		&ops,
 		options,
+		permissionCreate,
 	)
 
 	diffByName(
@@ -167,6 +182,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		func(a, b model.CommentDef) bool { return a.Comment == b.Comment },
 		&ops,
 		options,
+		permissionAlter,
 	)
 
 	sort.Slice(ops, func(i, j int) bool {
@@ -197,7 +213,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 	}
 }
 
-func diffByName[T any](project *projectxml.Project, desired, actual []T, key func(T) string, createOp func(T) Operation, dropOp func(T) Operation, equal func(T, T) bool, ops *[]Operation, options Options) {
+func diffByName[T any](project *projectxml.Project, desired, actual []T, key func(T) string, createOp func(T) Operation, dropOp func(T) Operation, equal func(T, T) bool, ops *[]Operation, options Options, createPermission planPermission) {
 	desiredMap := make(map[string]T, len(desired))
 	for _, item := range desired {
 		desiredMap[key(item)] = item
@@ -210,7 +226,7 @@ func diffByName[T any](project *projectxml.Project, desired, actual []T, key fun
 	for name, desiredItem := range desiredMap {
 		actualItem, exists := actualMap[name]
 		if !exists {
-			*ops = append(*ops, createOp(desiredItem))
+			*ops = append(*ops, requirePermission(createOp(desiredItem), project, createPermission))
 			continue
 		}
 		if !equal(desiredItem, actualItem) {
@@ -222,14 +238,15 @@ func diffByName[T any](project *projectxml.Project, desired, actual []T, key fun
 		if _, exists := desiredMap[name]; exists {
 			continue
 		}
-		if project.Target.Plan.AllowDrop || options.AllowDrop {
-			*ops = append(*ops, dropOp(actualItem))
-		} else {
-			operation := dropOp(actualItem)
-			operation.Kind = "blocked-" + operation.Kind
-			operation.SQL = "-- " + operation.SQL
-			*ops = append(*ops, operation)
+		operation := dropOp(actualItem)
+		if operation.Risk != "destructive" {
+			*ops = append(*ops, requirePermission(operation, project, permissionAlter))
+			continue
 		}
+		if !(project.Target.Plan.AllowDrop || options.AllowDrop) {
+			operation = blockOperation(operation, "drops are disabled by the project and invocation")
+		}
+		*ops = append(*ops, operation)
 	}
 }
 
@@ -246,7 +263,8 @@ func diffTables(project *projectxml.Project, desired, actual []model.TableDef, o
 	for name, desiredItem := range desiredMap {
 		actualItem, exists := actualMap[name]
 		if !exists {
-			*ops = append(*ops, op("create-table", "table", name, "safe", ensureSemicolon(desiredItem.SQL)))
+			create := op("create-table", "table", name, "safe", ensureSemicolon(desiredItem.SQL))
+			*ops = append(*ops, requirePermission(create, project, permissionCreate))
 			continue
 		}
 		if tableEqual(desiredItem, actualItem) {
@@ -254,9 +272,9 @@ func diffTables(project *projectxml.Project, desired, actual []model.TableDef, o
 		}
 		if alterOps, ok := alterTableOps(desiredItem, actualItem); ok {
 			for index := range alterOps {
+				alterOps[index] = requirePermission(alterOps[index], project, permissionAlter)
 				if alterOps[index].Risk == "destructive" && !(project.Target.Plan.AllowDrop || options.AllowDrop) {
-					alterOps[index].Kind = "blocked-" + alterOps[index].Kind
-					alterOps[index].SQL = "-- requires --allow-drop because a column would be removed\n-- " + alterOps[index].SQL
+					alterOps[index] = blockOperation(alterOps[index], "requires --allow-drop because a column would be removed")
 				}
 			}
 			*ops = append(*ops, alterOps...)
@@ -286,14 +304,20 @@ func recreateOps(create Operation, drop Operation, project *projectxml.Project, 
 	if create.ObjectType == "view" {
 		create.Kind = "replace-view"
 		create.SQL = ensureOrReplace(create.SQL, "CREATE VIEW", "CREATE OR REPLACE VIEW")
-		return []Operation{create}
+		return []Operation{requirePermission(create, project, permissionAlter)}
 	}
 	if create.ObjectType == "function" || create.ObjectType == "procedure" {
 		needle := "CREATE " + strings.ToUpper(create.ObjectType)
 		replacement := "CREATE OR REPLACE " + strings.ToUpper(create.ObjectType)
 		create.Kind = "replace-routine"
 		create.SQL = ensureOrReplace(create.SQL, needle, replacement)
-		return []Operation{create}
+		return []Operation{requirePermission(create, project, permissionAlter)}
+	}
+	if !project.Target.Plan.AllowAlter {
+		return []Operation{
+			blockOperation(drop, "alters are disabled by the project"),
+			blockOperation(create, "alters are disabled by the project"),
+		}
 	}
 
 	if project.Target.Plan.AllowDrop || options.AllowDrop {
@@ -306,6 +330,29 @@ func recreateOps(create Operation, drop Operation, project *projectxml.Project, 
 	create.Risk = "destructive"
 	create.SQL = "-- requires destructive recreate\n-- " + create.SQL
 	return []Operation{drop, create}
+}
+
+func requirePermission(operation Operation, project *projectxml.Project, permission planPermission) Operation {
+	allowed := project.Target.Plan.AllowCreate
+	reason := "creates are disabled by the project"
+	if permission == permissionAlter {
+		allowed = project.Target.Plan.AllowAlter
+		reason = "alters are disabled by the project"
+	}
+	if allowed {
+		return operation
+	}
+	return blockOperation(operation, reason)
+}
+
+func blockOperation(operation Operation, reason string) Operation {
+	if !strings.HasPrefix(operation.Kind, "blocked-") {
+		operation.Kind = "blocked-" + operation.Kind
+	}
+	if operation.SQL != "" && !strings.HasPrefix(strings.TrimSpace(operation.SQL), "--") {
+		operation.SQL = "-- " + reason + "\n-- " + strings.ReplaceAll(operation.SQL, "\n", "\n-- ")
+	}
+	return operation
 }
 
 func ensureSemicolon(sql string) string {

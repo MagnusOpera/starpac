@@ -79,9 +79,15 @@ additional enforcement gate.
 
 ## Authorization
 
-Without authorization, destructive SQL is emitted as comments and the plan is
-reported as blocked. Authorize drops either persistently with
-`Target/Plan AllowDrop="true"` or for one invocation with `--allow-drop`.
+`Target/Plan` permissions are enforced independently:
+
+- `AllowCreate` controls new schema objects.
+- `AllowAlter` controls native changes and object replacements.
+- `AllowDrop` controls destructive removals and recreations.
+
+Without the required permission, SQL is emitted as comments and the plan is
+reported as blocked. `--allow-drop` can authorize drops for one invocation; it
+does not override disabled creates or alters.
 
 ## Apply
 

@@ -14,6 +14,8 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
   changes and for primary-key additions, removals, and replacements.
 - Added semantic diffing and native row-preserving alterations for named and
   unnamed foreign-key, unique, and check constraints.
+- Enforced the pgpac project's `AllowCreate` and `AllowAlter` plan permissions
+  with visible blocked operations, matching its existing drop authorization.
 - Documented additive and destructive schema behavior, authorization, and the
   remaining table and constraint diffing limitations.
 

@@ -61,9 +61,9 @@ Each item type points to SQL files using glob patterns relative to the project f
 - `OwnedSchemas`: schemas treated as owned by the package.
 - `Extensions`: expected extensions and versions.
 - `Comparison`: toggles for privileges, owners, and comments.
-- `Plan`: `AllowDrop` authorizes destructive operations from the project.
-  `AllowCreate` and `AllowAlter` are reserved project settings and are not
-  currently enforced by pgpac.
+- `Plan`: `AllowCreate`, `AllowAlter`, and `AllowDrop` authorize their
+  respective operation classes. Disabled operations remain visible as blocked
+  plan entries.
 - `Apply`: transaction and timeout behavior for execution.
 
 See the [safety model](./safety-model.md) for the exact additive and destructive

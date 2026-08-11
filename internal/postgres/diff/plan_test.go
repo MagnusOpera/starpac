@@ -30,7 +30,7 @@ func TestBuildPlanCreateAndDrop(t *testing.T) {
 }
 
 func TestBuildPlanTreatsEquivalentTableDefinitionsAsEqual(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{
 		Tables: []model.TableDef{{
 			Schema: "app",
@@ -53,7 +53,7 @@ func TestBuildPlanTreatsEquivalentTableDefinitionsAsEqual(t *testing.T) {
 }
 
 func TestBuildPlanAddsColumnIncrementally(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{
 		Tables: []model.TableDef{{
 			Schema: "app",
@@ -82,7 +82,7 @@ func TestBuildPlanAddsColumnIncrementally(t *testing.T) {
 }
 
 func TestBuildPlanDropsColumnIncrementallyWhenAuthorized(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -114,7 +114,7 @@ func TestBuildPlanDropsColumnIncrementallyWhenAuthorized(t *testing.T) {
 }
 
 func TestBuildPlanBlocksColumnDropWithoutAuthorization(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -139,7 +139,7 @@ func TestBuildPlanBlocksColumnDropWithoutAuthorization(t *testing.T) {
 }
 
 func TestBuildPlanAltersColumnTypeDefaultAndNullabilityWithoutRecreatingTable(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -178,7 +178,7 @@ func TestBuildPlanAltersColumnTypeDefaultAndNullabilityWithoutRecreatingTable(t 
 }
 
 func TestBuildPlanDropsColumnDefaultAndNotNullWithoutRecreatingTable(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -205,7 +205,7 @@ func TestBuildPlanDropsColumnDefaultAndNotNullWithoutRecreatingTable(t *testing.
 }
 
 func TestBuildPlanReplacesPrimaryKeyWithoutRecreatingTable(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -235,7 +235,7 @@ func TestBuildPlanReplacesPrimaryKeyWithoutRecreatingTable(t *testing.T) {
 }
 
 func TestBuildPlanTreatsEquivalentInlineAndNamedConstraintsAsEqual(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -268,7 +268,7 @@ func TestBuildPlanTreatsEquivalentInlineAndNamedConstraintsAsEqual(t *testing.T)
 }
 
 func TestBuildPlanAddsForeignKeyUniqueAndCheckConstraintsNatively(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -309,7 +309,7 @@ func TestBuildPlanAddsForeignKeyUniqueAndCheckConstraintsNatively(t *testing.T) 
 }
 
 func TestBuildPlanReplacesAndDropsConstraintsBeforeAddingDesiredDefinitions(t *testing.T) {
-	project := &projectxml.Project{}
+	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{
 		Schema: "app",
 		Name:   "widgets",
@@ -354,4 +354,53 @@ func TestBuildPlanReplacesAndDropsConstraintsBeforeAddingDesiredDefinitions(t *t
 	if plan.Summary.Destructive || !plan.Summary.Supported {
 		t.Fatalf("unexpected plan safety metadata: %#v", plan.Summary)
 	}
+}
+
+func TestBuildPlanEnforcesCreatePermission(t *testing.T) {
+	project := &projectxml.Project{Target: projectxml.TargetConfig{Plan: projectxml.PlanConfig{
+		AllowAlter: true,
+	}}}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid PRIMARY KEY)",
+	}}}
+
+	plan := BuildPlan(project, desired, &model.SchemaModel{}, Options{})
+	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "blocked-create-table" {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	if plan.Summary.Supported || !strings.Contains(plan.Operations[0].SQL, "creates are disabled") {
+		t.Fatalf("create permission was not enforced: %#v", plan)
+	}
+}
+
+func TestBuildPlanEnforcesAlterPermission(t *testing.T) {
+	project := &projectxml.Project{Target: projectxml.TargetConfig{Plan: projectxml.PlanConfig{
+		AllowCreate: true,
+	}}}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid PRIMARY KEY, name text)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid NOT NULL, CONSTRAINT "widgets_pkey" PRIMARY KEY (id))`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "blocked-alter-table-add-column" {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	if plan.Summary.Supported || !strings.Contains(plan.Operations[0].SQL, "alters are disabled") {
+		t.Fatalf("alter permission was not enforced: %#v", plan)
+	}
+}
+
+func writablePostgresProject() *projectxml.Project {
+	return &projectxml.Project{Target: projectxml.TargetConfig{
+		Plan: projectxml.PlanConfig{AllowCreate: true, AllowAlter: true},
+	}}
 }
