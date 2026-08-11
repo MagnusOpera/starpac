@@ -6,6 +6,11 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### Starpac
+
+- Added per-product schema feature-support references covering native,
+  migration, destructive, blocked, and unsupported behavior.
+
 ### pgpac
 
 - Added row-preserving, explicitly gated `ALTER TABLE ... DROP COLUMN` plans and
@@ -16,6 +21,8 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
   unnamed foreign-key, unique, and check constraints.
 - Enforced the pgpac project's `AllowCreate` and `AllowAlter` plan permissions
   with visible blocked operations, matching its existing drop authorization.
+- Added proactive foreign-key dependency refresh around referenced key and
+  column-type alterations instead of relying on PostgreSQL to reject them.
 - Documented additive and destructive schema behavior, authorization, and the
   remaining table and constraint diffing limitations.
 

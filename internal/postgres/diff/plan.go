@@ -65,6 +65,7 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 	)
 
 	diffTables(project, desired.Tables, actual.Tables, &ops, options)
+	refreshDependentForeignKeys(project, desired.Tables, actual.Tables, &ops)
 
 	diffByName(
 		project,
@@ -230,7 +231,13 @@ func diffByName[T any](project *projectxml.Project, desired, actual []T, key fun
 			continue
 		}
 		if !equal(desiredItem, actualItem) {
-			*ops = append(*ops, recreateOps(createOp(desiredItem), dropOp(actualItem), project, options)...)
+			create := createOp(desiredItem)
+			drop := dropOp(actualItem)
+			if create.Risk != "destructive" && drop.Risk != "destructive" {
+				*ops = append(*ops, requirePermission(create, project, permissionAlter))
+			} else {
+				*ops = append(*ops, recreateOps(create, drop, project, options)...)
+			}
 		}
 	}
 
@@ -298,6 +305,141 @@ func diffTables(project *projectxml.Project, desired, actual []model.TableDef, o
 		drop.SQL = "-- " + drop.SQL
 		*ops = append(*ops, drop)
 	}
+}
+
+func refreshDependentForeignKeys(project *projectxml.Project, desiredTables, actualTables []model.TableDef, operations *[]Operation) {
+	desiredByName := make(map[string]model.TableDef, len(desiredTables))
+	actualByName := make(map[string]model.TableDef, len(actualTables))
+	for _, table := range desiredTables {
+		desiredByName[model.QualifiedName(table.Schema, table.Name)] = table
+	}
+	for _, table := range actualTables {
+		actualByName[model.QualifiedName(table.Schema, table.Name)] = table
+	}
+
+	affected := map[string]bool{}
+	for name, desiredTable := range desiredByName {
+		actualTable, exists := actualByName[name]
+		if !exists || !tableNeedsForeignKeyRefresh(desiredTable, actualTable) {
+			continue
+		}
+		affected[name] = true
+	}
+	if len(affected) == 0 {
+		return
+	}
+
+	existing := map[string]bool{}
+	for _, operation := range *operations {
+		existing[operation.Kind+"\x00"+operation.ObjectKey] = true
+	}
+	for childName, actualTable := range actualByName {
+		desiredTable, exists := desiredByName[childName]
+		if !exists {
+			continue
+		}
+		actualShape, actualOK := parseCreateTableShape(actualTable.SQL, actualTable.Schema)
+		desiredShape, desiredOK := parseCreateTableShape(desiredTable.SQL, desiredTable.Schema)
+		if !actualOK || !desiredOK {
+			continue
+		}
+		for _, actualConstraint := range actualShape.Constraints {
+			if actualConstraint.Kind != "foreign-key" || !affected[actualConstraint.ReferenceTable] || actualConstraint.Name == "" {
+				continue
+			}
+			desiredConstraint, found := equivalentDesiredConstraint(actualConstraint, desiredShape.Constraints)
+			if !found {
+				continue
+			}
+			objectKey := childName + "." + actualConstraint.Name
+			dropKey := "alter-table-drop-constraint\x00" + objectKey
+			addKey := "alter-table-add-constraint\x00" + objectKey
+			if existing[dropKey] || existing[addKey] {
+				continue
+			}
+			tableSQL := quoteQName(actualTable.Schema, actualTable.Name)
+			drop := op(
+				"alter-table-drop-constraint",
+				"constraint",
+				objectKey,
+				"migration",
+				fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s;", tableSQL, quoteQName(actualConstraint.Name)),
+			)
+			constraintName := desiredConstraint.Name
+			if constraintName == "" {
+				constraintName = actualConstraint.Name
+			}
+			definition := desiredConstraint.Definition
+			if constraintName != "" {
+				definition = "CONSTRAINT " + quoteQName(constraintName) + " " + definition
+			}
+			add := op(
+				"alter-table-add-constraint",
+				"constraint",
+				objectKey,
+				"migration",
+				fmt.Sprintf("ALTER TABLE %s ADD %s;", tableSQL, definition),
+			)
+			*operations = append(
+				*operations,
+				requirePermission(drop, project, permissionAlter),
+				requirePermission(add, project, permissionAlter),
+			)
+			existing[dropKey] = true
+			existing[addKey] = true
+		}
+	}
+}
+
+func tableNeedsForeignKeyRefresh(desiredTable, actualTable model.TableDef) bool {
+	desired, desiredOK := parseCreateTableShape(desiredTable.SQL, desiredTable.Schema)
+	actual, actualOK := parseCreateTableShape(actualTable.SQL, actualTable.Schema)
+	if !desiredOK || !actualOK {
+		return false
+	}
+	if !primaryKeyEqual(desired, actual) || !constraintsOfKindEqual(desired.Constraints, actual.Constraints, "unique") {
+		return true
+	}
+	actualColumns := make(map[string]tableColumnShape, len(actual.Columns))
+	for _, column := range actual.Columns {
+		actualColumns[column.Name] = column
+	}
+	for _, desiredColumn := range desired.Columns {
+		actualColumn, exists := actualColumns[desiredColumn.Name]
+		if exists && normalizeComparableType(desiredColumn.DataType) != normalizeComparableType(actualColumn.DataType) {
+			return true
+		}
+	}
+	return false
+}
+
+func constraintsOfKindEqual(desired, actual []tableConstraintShape, kind string) bool {
+	var desiredKind []tableConstraintShape
+	var actualKind []tableConstraintShape
+	for _, constraint := range desired {
+		if constraint.Kind == kind {
+			desiredKind = append(desiredKind, constraint)
+		}
+	}
+	for _, constraint := range actual {
+		if constraint.Kind == kind {
+			actualKind = append(actualKind, constraint)
+		}
+	}
+	return constraintsEqual(desiredKind, actualKind)
+}
+
+func equivalentDesiredConstraint(actual tableConstraintShape, desired []tableConstraintShape) (tableConstraintShape, bool) {
+	for _, constraint := range desired {
+		if constraint.Kind != actual.Kind || constraint.Semantic != actual.Semantic {
+			continue
+		}
+		if constraint.Name != "" && constraint.Name != actual.Name {
+			continue
+		}
+		return constraint, true
+	}
+	return tableConstraintShape{}, false
 }
 
 func recreateOps(create Operation, drop Operation, project *projectxml.Project, options Options) []Operation {
@@ -555,10 +697,11 @@ type tableShape struct {
 }
 
 type tableConstraintShape struct {
-	Name       string
-	Kind       string
-	Definition string
-	Semantic   string
+	Name           string
+	Kind           string
+	Definition     string
+	Semantic       string
+	ReferenceTable string
 }
 
 func tableEqual(a, b model.TableDef) bool {
@@ -960,14 +1103,27 @@ func parseNonPrimaryConstraints(sql, schema string, bodyStart, bodyEnd int) ([]t
 				return nil, false
 			}
 			result = append(result, tableConstraintShape{
-				Name:       constraint.GetConname(),
-				Kind:       kind,
-				Definition: definition,
-				Semantic:   normalizeConstraintSemantic(kind, definition, schema),
+				Name:           constraint.GetConname(),
+				Kind:           kind,
+				Definition:     definition,
+				Semantic:       normalizeConstraintSemantic(kind, definition, schema),
+				ReferenceTable: constraintReferenceTable(constraint, schema),
 			})
 		}
 	}
 	return result, true
+}
+
+func constraintReferenceTable(constraint *pg_query.Constraint, defaultSchema string) string {
+	if constraint == nil || constraint.GetContype() != pg_query.ConstrType_CONSTR_FOREIGN || constraint.GetPktable() == nil {
+		return ""
+	}
+	reference := constraint.GetPktable()
+	schema := reference.GetSchemaname()
+	if schema == "" {
+		schema = defaultSchema
+	}
+	return model.QualifiedName(schema, reference.GetRelname())
 }
 
 func constraintKind(constraint *pg_query.Constraint) string {

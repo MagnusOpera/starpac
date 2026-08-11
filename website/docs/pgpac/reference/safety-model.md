@@ -45,6 +45,11 @@ depending on PostgreSQL's generated name. Constraint replacement drops the old
 named constraint before adding and validating the desired definition; it does
 not recreate the table.
 
+When a column type, primary key, or unique key changes on a referenced table,
+pgpac proactively drops equivalent dependent foreign keys, performs the
+referenced-table alteration, then recreates and validates those foreign keys.
+This avoids delegating dependency discovery to a failed PostgreSQL alteration.
+
 ## Destructive operations
 
 The following operations require drop authorization:

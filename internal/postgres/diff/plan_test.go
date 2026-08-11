@@ -399,6 +399,63 @@ func TestBuildPlanEnforcesAlterPermission(t *testing.T) {
 	}
 }
 
+func TestBuildPlanRefreshesDependentForeignKeyAroundReferencedColumnTypeChange(t *testing.T) {
+	project := writablePostgresProject()
+	desired := &model.SchemaModel{Tables: []model.TableDef{
+		{
+			Schema: "app",
+			Name:   "parents",
+			SQL:    "CREATE TABLE app.parents (id bigint PRIMARY KEY)",
+		},
+		{
+			Schema: "app",
+			Name:   "children",
+			SQL:    "CREATE TABLE app.children (id bigint PRIMARY KEY, parent_id bigint REFERENCES app.parents(id))",
+		},
+	}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{
+		{
+			Schema: "app",
+			Name:   "parents",
+			SQL:    `CREATE TABLE "app"."parents" ("id" integer NOT NULL, CONSTRAINT "parents_pkey" PRIMARY KEY (id))`,
+		},
+		{
+			Schema: "app",
+			Name:   "children",
+			SQL: `CREATE TABLE "app"."children" (
+				"id" bigint NOT NULL,
+				"parent_id" bigint,
+				CONSTRAINT "children_pkey" PRIMARY KEY (id),
+				CONSTRAINT "children_parent_id_fkey" FOREIGN KEY (parent_id) REFERENCES app.parents(id)
+			)`,
+		},
+	}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	wantKinds := []string{
+		"alter-table-drop-constraint",
+		"alter-table-alter-column-type",
+		"alter-table-add-constraint",
+	}
+	if len(plan.Operations) != len(wantKinds) {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	for index, wantKind := range wantKinds {
+		if plan.Operations[index].Kind != wantKind {
+			t.Fatalf("operation %d = %#v, want %s", index, plan.Operations[index], wantKind)
+		}
+	}
+	if !strings.Contains(plan.Operations[0].SQL, `ALTER TABLE "app"."children" DROP CONSTRAINT "children_parent_id_fkey"`) {
+		t.Fatalf("dependent foreign key was not dropped first: %#v", plan.Operations)
+	}
+	if !strings.Contains(plan.Operations[2].SQL, `ALTER TABLE "app"."children" ADD CONSTRAINT "children_parent_id_fkey"`) {
+		t.Fatalf("dependent foreign key was not restored: %#v", plan.Operations)
+	}
+	if plan.Summary.Destructive || !plan.Summary.Supported {
+		t.Fatalf("unexpected plan safety metadata: %#v", plan.Summary)
+	}
+}
+
 func writablePostgresProject() *projectxml.Project {
 	return &projectxml.Project{Target: projectxml.TargetConfig{
 		Plan: projectxml.PlanConfig{AllowCreate: true, AllowAlter: true},
