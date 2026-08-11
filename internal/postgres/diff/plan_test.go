@@ -137,3 +137,99 @@ func TestBuildPlanBlocksColumnDropWithoutAuthorization(t *testing.T) {
 		t.Fatalf("drop SQL was not blocked: %q", plan.Operations[0].SQL)
 	}
 }
+
+func TestBuildPlanAltersColumnTypeDefaultAndNullabilityWithoutRecreatingTable(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid PRIMARY KEY, quantity bigint NOT NULL DEFAULT 1)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid NOT NULL, "quantity" integer DEFAULT 0, CONSTRAINT "widgets_pkey" PRIMARY KEY (id))`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	wantKinds := []string{
+		"alter-table-drop-column-default",
+		"alter-table-alter-column-type",
+		"alter-table-set-column-default",
+		"alter-table-set-column-not-null",
+	}
+	if len(plan.Operations) != len(wantKinds) {
+		t.Fatalf("operations = %#v, want %d native alterations", plan.Operations, len(wantKinds))
+	}
+	for index, wantKind := range wantKinds {
+		if plan.Operations[index].Kind != wantKind {
+			t.Fatalf("operation %d kind = %q, want %q: %#v", index, plan.Operations[index].Kind, wantKind, plan.Operations)
+		}
+		if strings.Contains(plan.Operations[index].SQL, "DROP TABLE") {
+			t.Fatalf("column alteration recreates table: %s", plan.Operations[index].SQL)
+		}
+	}
+	if got, want := plan.Operations[1].SQL, `ALTER TABLE "app"."widgets" ALTER COLUMN "quantity" TYPE bigint USING "quantity"::bigint;`; got != want {
+		t.Fatalf("type alteration SQL = %q, want %q", got, want)
+	}
+	if plan.Summary.Destructive || !plan.Summary.Supported {
+		t.Fatalf("unexpected plan safety metadata: %#v", plan.Summary)
+	}
+}
+
+func TestBuildPlanDropsColumnDefaultAndNotNullWithoutRecreatingTable(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid PRIMARY KEY, name text)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid NOT NULL, "name" text DEFAULT 'unknown' NOT NULL, CONSTRAINT "widgets_pkey" PRIMARY KEY (id))`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 2 {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	if plan.Operations[0].Kind != "alter-table-drop-column-default" || plan.Operations[1].Kind != "alter-table-drop-column-not-null" {
+		t.Fatalf("unexpected operation order: %#v", plan.Operations)
+	}
+	for _, operation := range plan.Operations {
+		if operation.Risk != "safe" || strings.Contains(operation.SQL, "DROP TABLE") {
+			t.Fatalf("unexpected native alteration: %#v", operation)
+		}
+	}
+}
+
+func TestBuildPlanReplacesPrimaryKeyWithoutRecreatingTable(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (tenant_id uuid NOT NULL, id uuid NOT NULL, CONSTRAINT widgets_pkey PRIMARY KEY (tenant_id, id))",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("tenant_id" uuid NOT NULL, "id" uuid NOT NULL, CONSTRAINT "widgets_pkey" PRIMARY KEY (id))`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 2 {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	if plan.Operations[0].Kind != "alter-table-drop-primary-key" || plan.Operations[1].Kind != "alter-table-add-primary-key" {
+		t.Fatalf("unexpected primary-key operations: %#v", plan.Operations)
+	}
+	if got, want := plan.Operations[1].SQL, `ALTER TABLE "app"."widgets" ADD CONSTRAINT "widgets_pkey" PRIMARY KEY ("tenant_id", "id");`; got != want {
+		t.Fatalf("add primary key SQL = %q, want %q", got, want)
+	}
+	for _, operation := range plan.Operations {
+		if operation.Risk != "migration" || strings.Contains(operation.SQL, "DROP TABLE") {
+			t.Fatalf("unexpected primary-key alteration: %#v", operation)
+		}
+	}
+}

@@ -10,6 +10,8 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 - Added row-preserving, explicitly gated `ALTER TABLE ... DROP COLUMN` plans and
   made blocked PostgreSQL plans report their unsupported status.
+- Added native row-preserving plans for column type, default, and nullability
+  changes and for primary-key additions, removals, and replacements.
 - Documented additive and destructive schema behavior, authorization, and the
   remaining table and constraint diffing limitations.
 

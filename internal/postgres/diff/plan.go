@@ -364,6 +364,22 @@ func weight(kind string) int {
 		return 30
 	case strings.Contains(kind, "drop-table"):
 		return 40
+	case strings.Contains(kind, "drop-primary-key"):
+		return 41
+	case strings.Contains(kind, "drop-column-default"):
+		return 42
+	case strings.Contains(kind, "alter-column-type"):
+		return 43
+	case strings.Contains(kind, "set-column-default"):
+		return 44
+	case strings.Contains(kind, "column-not-null"):
+		return 45
+	case strings.Contains(kind, "add-column"):
+		return 46
+	case strings.Contains(kind, "add-primary-key"):
+		return 47
+	case strings.Contains(kind, "drop-column"):
+		return 48
 	case strings.Contains(kind, "create-table"):
 		return 50
 	case strings.Contains(kind, "replace-view"), strings.Contains(kind, "create-view"):
@@ -479,8 +495,9 @@ type tableColumnShape struct {
 }
 
 type tableShape struct {
-	Columns    []tableColumnShape
-	PrimaryKey []string
+	Columns        []tableColumnShape
+	PrimaryKey     []string
+	PrimaryKeyName string
 }
 
 func tableEqual(a, b model.TableDef) bool {
@@ -504,65 +521,186 @@ func alterTableOps(desiredItem, actualItem model.TableDef) ([]Operation, bool) {
 	if !ok {
 		return nil, false
 	}
-	if !stringSlicesEqual(desired.PrimaryKey, actual.PrimaryKey) {
-		return nil, false
+	tableKey := model.QualifiedName(desiredItem.Schema, desiredItem.Name)
+	tableSQL := quoteQName(desiredItem.Schema, desiredItem.Name)
+	desiredColumns := make(map[string]tableColumnShape, len(desired.Columns))
+	actualColumns := make(map[string]tableColumnShape, len(actual.Columns))
+	for _, column := range desired.Columns {
+		desiredColumns[column.Name] = column
 	}
-	if len(actual.Columns) > len(desired.Columns) {
-		return dropColumnOps(desiredItem, desired, actual)
+	for _, column := range actual.Columns {
+		actualColumns[column.Name] = column
 	}
-	for i := range actual.Columns {
-		if !tableColumnEqual(desired.Columns[i], actual.Columns[i]) {
-			return nil, false
+
+	var operations []Operation
+	if !primaryKeyEqual(desired, actual) && len(actual.PrimaryKey) > 0 {
+		constraintName := actual.PrimaryKeyName
+		if constraintName == "" {
+			constraintName = desiredItem.Name + "_pkey"
 		}
-	}
-	var ops []Operation
-	objectKey := model.QualifiedName(desiredItem.Schema, desiredItem.Name)
-	for _, col := range desired.Columns[len(actual.Columns):] {
-		ops = append(ops, op(
-			"alter-table-add-column",
-			"table",
-			objectKey,
-			"safe",
-			fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s;", quoteQName(desiredItem.Schema, desiredItem.Name), col.Fragment),
+		operations = append(operations, op(
+			"alter-table-drop-primary-key",
+			"constraint",
+			tableKey+"."+constraintName,
+			"migration",
+			fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s;", tableSQL, quoteQName(constraintName)),
 		))
 	}
-	return ops, len(ops) > 0
-}
 
-func dropColumnOps(desiredItem model.TableDef, desired, actual tableShape) ([]Operation, bool) {
-	desiredIndex := 0
-	var dropped []tableColumnShape
-	for _, actualColumn := range actual.Columns {
-		if desiredIndex < len(desired.Columns) && tableColumnEqual(desired.Columns[desiredIndex], actualColumn) {
-			desiredIndex++
+	for _, desiredColumn := range desired.Columns {
+		actualColumn, exists := actualColumns[desiredColumn.Name]
+		if !exists {
+			if containsIdentifier(desired.PrimaryKey, desiredColumn.Name) && strings.Contains(strings.ToUpper(desiredColumn.Fragment), " PRIMARY KEY") {
+				return nil, false
+			}
+			operations = append(operations, op(
+				"alter-table-add-column",
+				"column",
+				tableKey+"."+desiredColumn.Name,
+				"safe",
+				fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s;", tableSQL, desiredColumn.Fragment),
+			))
 			continue
 		}
-		dropped = append(dropped, actualColumn)
-	}
-	if desiredIndex != len(desired.Columns) || len(dropped) == 0 {
-		return nil, false
+		operations = append(operations, alterColumnOps(tableKey, tableSQL, desiredColumn, actualColumn)...)
 	}
 
-	tableKey := model.QualifiedName(desiredItem.Schema, desiredItem.Name)
-	operations := make([]Operation, 0, len(dropped))
-	for _, column := range dropped {
+	if !primaryKeyEqual(desired, actual) && len(desired.PrimaryKey) > 0 {
+		constraintName := desired.PrimaryKeyName
+		if constraintName == "" {
+			constraintName = actual.PrimaryKeyName
+		}
+		if constraintName == "" {
+			constraintName = desiredItem.Name + "_pkey"
+		}
+		columns := make([]string, 0, len(desired.PrimaryKey))
+		for _, column := range desired.PrimaryKey {
+			columns = append(columns, quoteQName(column))
+		}
+		operations = append(operations, op(
+			"alter-table-add-primary-key",
+			"constraint",
+			tableKey+"."+constraintName,
+			"migration",
+			fmt.Sprintf(
+				"ALTER TABLE %s ADD CONSTRAINT %s PRIMARY KEY (%s);",
+				tableSQL,
+				quoteQName(constraintName),
+				strings.Join(columns, ", "),
+			),
+		))
+	}
+
+	for _, actualColumn := range actual.Columns {
+		if _, exists := desiredColumns[actualColumn.Name]; exists {
+			continue
+		}
 		operations = append(operations, op(
 			"alter-table-drop-column",
 			"column",
-			tableKey+"."+column.Name,
+			tableKey+"."+actualColumn.Name,
 			"destructive",
 			fmt.Sprintf(
 				"ALTER TABLE %s DROP COLUMN %s;",
-				quoteQName(desiredItem.Schema, desiredItem.Name),
-				quoteQName(column.Name),
+				tableSQL,
+				quoteQName(actualColumn.Name),
 			),
 		))
 	}
 	return operations, true
 }
 
+func alterColumnOps(tableKey, tableSQL string, desired, actual tableColumnShape) []Operation {
+	columnKey := tableKey + "." + desired.Name
+	columnSQL := quoteQName(desired.Name)
+	typeChanged := normalizeComparableType(desired.DataType) != normalizeComparableType(actual.DataType)
+	defaultChanged := normalizeComparableExpr(desired.DefaultSQL) != normalizeComparableExpr(actual.DefaultSQL)
+	var operations []Operation
+
+	if typeChanged && actual.DefaultSQL != "" {
+		operations = append(operations, op(
+			"alter-table-drop-column-default",
+			"column",
+			columnKey,
+			"migration",
+			fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT;", tableSQL, columnSQL),
+		))
+	}
+	if typeChanged {
+		operations = append(operations, op(
+			"alter-table-alter-column-type",
+			"column",
+			columnKey,
+			"migration",
+			fmt.Sprintf(
+				"ALTER TABLE %s ALTER COLUMN %s TYPE %s USING %s::%s;",
+				tableSQL,
+				columnSQL,
+				desired.DataType,
+				columnSQL,
+				desired.DataType,
+			),
+		))
+	}
+	if typeChanged || defaultChanged {
+		if desired.DefaultSQL == "" {
+			if !typeChanged {
+				operations = append(operations, op(
+					"alter-table-drop-column-default",
+					"column",
+					columnKey,
+					"safe",
+					fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT;", tableSQL, columnSQL),
+				))
+			}
+		} else {
+			operations = append(operations, op(
+				"alter-table-set-column-default",
+				"column",
+				columnKey,
+				"safe",
+				fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s;", tableSQL, columnSQL, desired.DefaultSQL),
+			))
+		}
+	}
+	if desired.NotNull != actual.NotNull {
+		kind := "alter-table-drop-column-not-null"
+		action := "DROP NOT NULL"
+		risk := "safe"
+		if desired.NotNull {
+			kind = "alter-table-set-column-not-null"
+			action = "SET NOT NULL"
+			risk = "migration"
+		}
+		operations = append(operations, op(
+			kind,
+			"column",
+			columnKey,
+			risk,
+			fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s %s;", tableSQL, columnSQL, action),
+		))
+	}
+	return operations
+}
+
+func primaryKeyEqual(desired, actual tableShape) bool {
+	if !stringSlicesEqual(desired.PrimaryKey, actual.PrimaryKey) {
+		return false
+	}
+	return desired.PrimaryKeyName == "" || desired.PrimaryKeyName == actual.PrimaryKeyName
+}
+
+func containsIdentifier(items []string, candidate string) bool {
+	for _, item := range items {
+		if item == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func tableShapeEqual(a, b tableShape) bool {
-	if !stringSlicesEqual(a.PrimaryKey, b.PrimaryKey) || len(a.Columns) != len(b.Columns) {
+	if !primaryKeyEqual(a, b) || len(a.Columns) != len(b.Columns) {
 		return false
 	}
 	for i := range a.Columns {
@@ -610,8 +748,9 @@ func parseCreateTableShape(sql string) (tableShape, bool) {
 			}
 			continue
 		}
-		if pk, ok := parsePrimaryKeyConstraint(item); ok {
+		if pk, name, ok := parsePrimaryKeyConstraint(item); ok {
 			shape.PrimaryKey = pk
+			shape.PrimaryKeyName = name
 		}
 	}
 	return shape, true
@@ -656,27 +795,35 @@ func parseTableColumn(fragment string) (tableColumnShape, bool, bool) {
 	return col, primaryKeyIdx >= 0, true
 }
 
-func parsePrimaryKeyConstraint(fragment string) ([]string, bool) {
+func parsePrimaryKeyConstraint(fragment string) ([]string, string, bool) {
 	upper := strings.ToUpper(fragment)
 	idx := strings.Index(upper, "PRIMARY KEY")
 	if idx == -1 {
-		return nil, false
+		return nil, "", false
+	}
+	constraintName := ""
+	prefix := strings.TrimSpace(fragment[:idx])
+	if strings.HasPrefix(strings.ToUpper(prefix), "CONSTRAINT") {
+		name, _, ok := cutIdentifier(strings.TrimSpace(prefix[len("CONSTRAINT"):]))
+		if ok {
+			constraintName = normalizeIdentifier(name)
+		}
 	}
 	open := strings.Index(fragment[idx:], "(")
 	if open == -1 {
-		return nil, false
+		return nil, "", false
 	}
 	open += idx
 	close := findMatchingParen(fragment, open)
 	if close == -1 {
-		return nil, false
+		return nil, "", false
 	}
 	parts := splitTopLevelCommaList(fragment[open+1 : close])
 	keys := make([]string, 0, len(parts))
 	for _, part := range parts {
 		keys = append(keys, normalizeIdentifier(strings.TrimSpace(part)))
 	}
-	return keys, true
+	return keys, constraintName, true
 }
 
 func cutIdentifier(input string) (string, string, bool) {
@@ -719,7 +866,8 @@ func normalizeIdentifier(s string) string {
 
 func normalizeComparableType(s string) string {
 	s = strings.ReplaceAll(strings.TrimSpace(s), `"`, "")
-	switch strings.ToLower(s) {
+	normalized := strings.ToLower(s)
+	switch normalized {
 	case "integer":
 		return "int"
 	case "character varying":
@@ -731,7 +879,7 @@ func normalizeComparableType(s string) string {
 	case "real":
 		return "float4"
 	}
-	return s
+	return normalized
 }
 
 func normalizeComparableExpr(s string) string {
