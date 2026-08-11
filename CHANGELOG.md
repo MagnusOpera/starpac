@@ -6,6 +6,11 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### Starpac
+
+- Fixed signed macOS release uploads under GitHub Actions' Node 24 runtime by
+  enabling the runner's system certificate authorities.
+
 ## [0.7.0]
 
 

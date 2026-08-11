@@ -89,6 +89,8 @@ jobs:
           xcode_path: '/Applications/Xcode_16.4.app'
           staple: false
       - uses: softprops/action-gh-release@v2
+        env:
+          NODE_OPTIONS: --use-system-ca
         with:
           tag_name: ${{ needs.identify.outputs.tag }}
           files: '.out/darwin/${{ matrix.tool }}-${{ needs.identify.outputs.version }}-darwin-arm64.zip'
