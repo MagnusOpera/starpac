@@ -1,25 +1,14 @@
 {
-  "version": "0.6.3",
-  "previous": "v0.6.2",
-  "commit": "20657bfec67ae696bd4eb4dcf17fba9497723bea",
+  "version": "0.7.0",
+  "previous": "v0.6.3",
+  "commit": "63607e73c8ed672071e838a5a2d83fbc0e17ca83",
   "artifacts": [
-    "pgpac",
-    "d1pac"
+    "pgpac"
   ],
   "reasons": {
     "pgpac": [
-      ".github/scripts/detect-impact.py",
-      ".github/scripts/release.sh",
-      ".github/scripts/test-release.sh",
-      ".github/workflows/on-push-tag.yml",
-      ".github/workflows/on-release-published.yml"
-    ],
-    "d1pac": [
-      ".github/scripts/detect-impact.py",
-      ".github/scripts/release.sh",
-      ".github/scripts/test-release.sh",
-      ".github/workflows/on-push-tag.yml",
-      ".github/workflows/on-release-published.yml"
+      "internal/postgres/diff/plan.go",
+      "internal/postgres/diff/plan_test.go"
     ]
   }
 }

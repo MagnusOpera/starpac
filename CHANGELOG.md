@@ -6,6 +6,9 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.7.0]
+
+
 ### Starpac
 
 - Added per-product schema feature-support references covering native,
@@ -31,6 +34,7 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 - Documented additive, table-rebuild, destructive, and blocked schema behavior
   with the applicable project and command-line safety gates.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.6.3...v0.7.0
 ## [0.6.3]
 
 
