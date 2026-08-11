@@ -174,17 +174,20 @@ func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, 
 		return weight(ops[i].Kind) < weight(ops[j].Kind)
 	})
 
+	supported := true
 	destructive := false
 	for _, operation := range ops {
+		if strings.HasPrefix(operation.Kind, "blocked-") {
+			supported = false
+		}
 		if operation.Risk == "destructive" {
 			destructive = true
-			break
 		}
 	}
 
 	return Plan{
 		Summary: Summary{
-			Supported:      true,
+			Supported:      supported,
 			Destructive:    destructive,
 			OperationCount: len(ops),
 		},
@@ -248,6 +251,12 @@ func diffTables(project *projectxml.Project, desired, actual []model.TableDef, o
 			continue
 		}
 		if alterOps, ok := alterTableOps(desiredItem, actualItem); ok {
+			for index := range alterOps {
+				if alterOps[index].Risk == "destructive" && !(project.Target.Plan.AllowDrop || options.AllowDrop) {
+					alterOps[index].Kind = "blocked-" + alterOps[index].Kind
+					alterOps[index].SQL = "-- requires --allow-drop because a column would be removed\n-- " + alterOps[index].SQL
+				}
+			}
 			*ops = append(*ops, alterOps...)
 			continue
 		}
@@ -495,11 +504,11 @@ func alterTableOps(desiredItem, actualItem model.TableDef) ([]Operation, bool) {
 	if !ok {
 		return nil, false
 	}
-	if len(actual.Columns) > len(desired.Columns) {
-		return nil, false
-	}
 	if !stringSlicesEqual(desired.PrimaryKey, actual.PrimaryKey) {
 		return nil, false
+	}
+	if len(actual.Columns) > len(desired.Columns) {
+		return dropColumnOps(desiredItem, desired, actual)
 	}
 	for i := range actual.Columns {
 		if !tableColumnEqual(desired.Columns[i], actual.Columns[i]) {
@@ -518,6 +527,38 @@ func alterTableOps(desiredItem, actualItem model.TableDef) ([]Operation, bool) {
 		))
 	}
 	return ops, len(ops) > 0
+}
+
+func dropColumnOps(desiredItem model.TableDef, desired, actual tableShape) ([]Operation, bool) {
+	desiredIndex := 0
+	var dropped []tableColumnShape
+	for _, actualColumn := range actual.Columns {
+		if desiredIndex < len(desired.Columns) && tableColumnEqual(desired.Columns[desiredIndex], actualColumn) {
+			desiredIndex++
+			continue
+		}
+		dropped = append(dropped, actualColumn)
+	}
+	if desiredIndex != len(desired.Columns) || len(dropped) == 0 {
+		return nil, false
+	}
+
+	tableKey := model.QualifiedName(desiredItem.Schema, desiredItem.Name)
+	operations := make([]Operation, 0, len(dropped))
+	for _, column := range dropped {
+		operations = append(operations, op(
+			"alter-table-drop-column",
+			"column",
+			tableKey+"."+column.Name,
+			"destructive",
+			fmt.Sprintf(
+				"ALTER TABLE %s DROP COLUMN %s;",
+				quoteQName(desiredItem.Schema, desiredItem.Name),
+				quoteQName(column.Name),
+			),
+		))
+	}
+	return operations, true
 }
 
 func tableShapeEqual(a, b tableShape) bool {

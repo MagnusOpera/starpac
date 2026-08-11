@@ -2,16 +2,59 @@
 title: Safety Model
 ---
 
-`pgpac` is opinionated about destructive operations.
+pgpac classifies every planned operation as `safe` or `destructive`. Operations
+that require drop authorization remain visible as commented `blocked-*`
+operations when authorization is absent.
 
-## Planning
+## Additive and replacement operations
 
-When the target contains objects that are absent from the desired model:
+The following operations are classified as safe and do not require drop
+authorization:
 
-- if drops are allowed, the plan emits executable destructive SQL
-- otherwise, the plan emits blocked operations with commented SQL
+- creating a missing schema object
+- adding a column when all existing columns and the primary key are unchanged
+- replacing a view or routine with `CREATE OR REPLACE`
+- setting or clearing a supported comment
 
-This makes the risk visible without silently applying destructive changes.
+Adding a column uses `ALTER TABLE ... ADD COLUMN` and preserves existing rows.
+PostgreSQL validates any new default and `NOT NULL` requirement while applying
+the statement.
+
+## Destructive operations
+
+The following operations require drop authorization:
+
+- dropping a schema, extension, table, index, view, routine, enum, domain, or
+  sequence that is absent from the desired model
+- dropping a column that is absent from the desired table
+- recreating an object that cannot be altered or replaced in place
+
+A column drop uses `ALTER TABLE ... DROP COLUMN` without `CASCADE`. It preserves
+the table and its remaining rows. If another object depends on the column,
+PostgreSQL rejects the operation instead of allowing pgpac to remove an
+unplanned dependency.
+
+## Current table-change limitations
+
+Only column additions and removals are incremental. Other table differences,
+including a changed column type, default, nullability, or primary key, currently
+fall back to dropping and recreating the complete table. That fallback removes
+all table data and uses `CASCADE`, so always inspect the generated SQL before
+authorizing it.
+
+Table-level `FOREIGN KEY`, `UNIQUE`, and `CHECK` constraints are not yet modeled
+independently. Some constraint-only changes may therefore be missed rather than
+planned. Use an explicit, reviewed migration until first-class constraint
+diffing is available.
+
+`StopOnDataLossRisk` is currently recorded from the project but is not an
+additional enforcement gate.
+
+## Authorization
+
+Without authorization, destructive SQL is emitted as comments and the plan is
+reported as blocked. Authorize drops either persistently with
+`Target/Plan AllowDrop="true"` or for one invocation with `--allow-drop`.
 
 ## Apply
 
@@ -21,6 +64,9 @@ This makes the risk visible without silently applying destructive changes.
 - `--allow-drop` is passed
 - `--force` is passed
 
+`--force` bypasses the authorization check; it does not change dependency
+handling or make an otherwise invalid PostgreSQL statement succeed.
+
 ## Timeouts and transactions
 
 Project files can define:
@@ -29,4 +75,7 @@ Project files can define:
 - `StatementTimeout`
 - `UseTransaction`
 
-These are applied before executing the plan so release automation and manual invocations behave consistently.
+These are applied before executing the plan so release automation and manual
+invocations behave consistently. With `UseTransaction="true"`, a failed
+operation rolls the complete apply back. Without it, earlier operations remain
+committed.

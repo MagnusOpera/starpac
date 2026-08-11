@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/MagnusOpera/starpac/internal/postgres/model"
@@ -77,5 +78,62 @@ func TestBuildPlanAddsColumnIncrementally(t *testing.T) {
 	}
 	if got, want := plan.Operations[0].SQL, `ALTER TABLE "app"."widgets" ADD COLUMN version integer NOT NULL DEFAULT 1;`; got != want {
 		t.Fatalf("operation SQL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildPlanDropsColumnIncrementallyWhenAuthorized(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid PRIMARY KEY, name text)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid NOT NULL, "obsolete" text, "name" text, CONSTRAINT "widgets_pkey" PRIMARY KEY (id))`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{AllowDrop: true})
+	if len(plan.Operations) != 1 {
+		t.Fatalf("expected 1 operation, got %#v", plan.Operations)
+	}
+	operation := plan.Operations[0]
+	if got, want := operation.Kind, "alter-table-drop-column"; got != want {
+		t.Fatalf("operation kind = %q, want %q", got, want)
+	}
+	if got, want := operation.ObjectKey, "app.widgets.obsolete"; got != want {
+		t.Fatalf("object key = %q, want %q", got, want)
+	}
+	if got, want := operation.SQL, `ALTER TABLE "app"."widgets" DROP COLUMN "obsolete";`; got != want {
+		t.Fatalf("operation SQL = %q, want %q", got, want)
+	}
+	if operation.Risk != "destructive" || !plan.Summary.Destructive || !plan.Summary.Supported {
+		t.Fatalf("unexpected plan safety metadata: %#v", plan)
+	}
+}
+
+func TestBuildPlanBlocksColumnDropWithoutAuthorization(t *testing.T) {
+	project := &projectxml.Project{}
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid PRIMARY KEY)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid NOT NULL, "obsolete" text, CONSTRAINT "widgets_pkey" PRIMARY KEY (id))`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "blocked-alter-table-drop-column" {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	if plan.Summary.Supported || !plan.Summary.Destructive {
+		t.Fatalf("unexpected plan safety metadata: %#v", plan.Summary)
+	}
+	if !strings.HasPrefix(plan.Operations[0].SQL, "-- requires --allow-drop") {
+		t.Fatalf("drop SQL was not blocked: %q", plan.Operations[0].SQL)
 	}
 }

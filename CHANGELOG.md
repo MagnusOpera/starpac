@@ -6,6 +6,18 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### pgpac
+
+- Added row-preserving, explicitly gated `ALTER TABLE ... DROP COLUMN` plans and
+  made blocked PostgreSQL plans report their unsupported status.
+- Documented additive and destructive schema behavior, authorization, and the
+  remaining table and constraint diffing limitations.
+
+### d1pac
+
+- Documented additive, table-rebuild, destructive, and blocked schema behavior
+  with the applicable project and command-line safety gates.
+
 ## [0.6.3]
 
 

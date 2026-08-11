@@ -52,5 +52,8 @@ not data changes.
 - `StopOnDataLossRisk` records the project's safety intent; destructive
   operations always require explicit drop authorization.
 
+See the [safety model](./safety-model.md) for the exact additive, rebuild, and
+destructive operation behavior.
+
 SQLite names beginning with `sqlite_` or `_cf_`, plus `d1_migrations`, are
 always ignored.
