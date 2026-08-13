@@ -78,6 +78,49 @@ func TestBuildPlanRebuildPreservesCommonColumnsAndDependentObjects(t *testing.T)
 	}
 }
 
+func TestBuildPlanRebuildRefreshesTriggersThatReferenceTheTable(t *testing.T) {
+	project := writableProject()
+	desiredTable := table(
+		"tenant_databases",
+		column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"),
+		column("status", "TEXT", true, 0, "status TEXT NOT NULL"),
+	)
+	actualTable := table(
+		"tenant_databases",
+		column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"),
+		column("status", "INTEGER", true, 0, "status INTEGER NOT NULL"),
+	)
+	workspaceProfiles := table(
+		"workspace_profiles",
+		column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"),
+	)
+	dependentTrigger := model.TriggerDef{
+		Name:      "require_assigned_tenant",
+		TableName: "workspace_profiles",
+		SQL:       "CREATE TRIGGER require_assigned_tenant BEFORE INSERT ON workspace_profiles WHEN NOT EXISTS (SELECT 1 FROM tenant_databases) BEGIN SELECT RAISE(ABORT, 'tenant required'); END",
+	}
+	desired := &model.SchemaModel{
+		Tables:   []model.TableDef{desiredTable, workspaceProfiles},
+		Triggers: []model.TriggerDef{dependentTrigger},
+	}
+	actual := &model.SchemaModel{
+		Tables:   []model.TableDef{actualTable, workspaceProfiles},
+		Triggers: []model.TriggerDef{dependentTrigger},
+	}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "rebuild-table" {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	sql := plan.Operations[0].SQL
+	dropTrigger := strings.Index(sql, `DROP TRIGGER "require_assigned_tenant"`)
+	dropTable := strings.Index(sql, `DROP TABLE "tenant_databases"`)
+	createTrigger := strings.LastIndex(sql, "CREATE TRIGGER require_assigned_tenant")
+	if dropTrigger < 0 || dropTable < 0 || createTrigger < 0 || !(dropTrigger < dropTable && dropTable < createTrigger) {
+		t.Fatalf("dependent trigger was not refreshed around table rebuild: %s", sql)
+	}
+}
+
 func TestBuildPlanBlocksDestructiveRebuild(t *testing.T) {
 	project := writableProject()
 	desired := table("widgets", column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"))

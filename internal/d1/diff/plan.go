@@ -20,10 +20,10 @@ type Operation = sharedplan.Operation
 
 func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, options Options) Plan {
 	operations := make([]Operation, 0)
-	rebuiltTables := diffTables(project, desired, actual, options, &operations)
+	rebuiltTables, rebuiltTriggers := diffTables(project, desired, actual, options, &operations)
 	diffIndexes(project, desired.Indexes, actual.Indexes, rebuiltTables, options, &operations)
 	diffViews(project, desired.Views, actual.Views, options, &operations)
-	diffTriggers(project, desired.Triggers, actual.Triggers, rebuiltTables, options, &operations)
+	diffTriggers(project, desired.Triggers, actual.Triggers, rebuiltTables, rebuiltTriggers, options, &operations)
 
 	sort.SliceStable(operations, func(left, right int) bool {
 		leftWeight := operationWeight(operations[left].Kind)
@@ -57,10 +57,11 @@ func diffTables(
 	actual *model.SchemaModel,
 	options Options,
 	operations *[]Operation,
-) map[string]bool {
+) (map[string]bool, map[string]bool) {
 	desiredByName := tablesByName(desired.Tables)
 	actualByName := tablesByName(actual.Tables)
 	rebuilt := map[string]bool{}
+	rebuiltTriggers := map[string]bool{}
 	for name, desiredTable := range desiredByName {
 		actualTable, exists := actualByName[name]
 		if !exists {
@@ -93,7 +94,10 @@ func diffTables(
 			continue
 		}
 		rebuilt[name] = true
-		rebuild := rebuildTableOperation(desiredTable, actualTable, desired)
+		rebuild, dependentTriggers := rebuildTableOperation(desiredTable, actualTable, desired, actual)
+		for _, triggerName := range dependentTriggers {
+			rebuiltTriggers[triggerName] = true
+		}
 		if referencingTables(actual.Tables, name) {
 			*operations = append(*operations, blocked(
 				rebuild,
@@ -120,7 +124,7 @@ func diffTables(
 		)
 		appendDrop(project, options, operations, drop)
 	}
-	return rebuilt
+	return rebuilt, rebuiltTriggers
 }
 
 func diffIndexes(
@@ -213,12 +217,16 @@ func diffTriggers(
 	desired []model.TriggerDef,
 	actual []model.TriggerDef,
 	rebuiltTables map[string]bool,
+	rebuiltTriggers map[string]bool,
 	options Options,
 	operations *[]Operation,
 ) {
 	desiredByName := triggersByName(desired)
 	actualByName := triggersByName(actual)
 	for name, desiredTrigger := range desiredByName {
+		if rebuiltTriggers[name] {
+			continue
+		}
 		if rebuiltTables[desiredTrigger.TableName] {
 			continue
 		}
@@ -238,6 +246,9 @@ func diffTriggers(
 		}
 	}
 	for name, actualTrigger := range actualByName {
+		if rebuiltTriggers[name] {
+			continue
+		}
 		if rebuiltTables[actualTrigger.TableName] {
 			continue
 		}
@@ -296,7 +307,7 @@ func additiveColumns(desired, actual model.TableDef) ([]model.ColumnDef, bool) {
 	return additions, true
 }
 
-func rebuildTableOperation(desired, actual model.TableDef, schema *model.SchemaModel) Operation {
+func rebuildTableOperation(desired, actual model.TableDef, desiredSchema, actualSchema *model.SchemaModel) (Operation, []string) {
 	temporaryName := "__d1pac_" + desired.Name + "_new"
 	createSQL, ok := model.ReplaceCreateTableName(desired.SQL, temporaryName)
 	if !ok {
@@ -306,7 +317,7 @@ func rebuildTableOperation(desired, actual model.TableDef, schema *model.SchemaM
 			desired.Name,
 			"migration",
 			"",
-		), "unable to rewrite CREATE TABLE statement")
+		), "unable to rewrite CREATE TABLE statement"), nil
 	}
 	actualColumns := map[string]bool{}
 	for _, column := range actual.Columns {
@@ -318,7 +329,20 @@ func rebuildTableOperation(desired, actual model.TableDef, schema *model.SchemaM
 			commonColumns = append(commonColumns, model.QuoteIdentifier(column.Name))
 		}
 	}
-	statements := []string{ensureSemicolon(createSQL)}
+	desiredTriggers := triggersByName(desiredSchema.Triggers)
+	dependentTriggers := make([]string, 0)
+	for _, trigger := range actualSchema.Triggers {
+		if trigger.TableName == desired.Name || !referencesIdentifier(trigger.SQL, desired.Name) {
+			continue
+		}
+		dependentTriggers = append(dependentTriggers, trigger.Name)
+	}
+	sort.Strings(dependentTriggers)
+	statements := make([]string, 0)
+	for _, triggerName := range dependentTriggers {
+		statements = append(statements, "DROP TRIGGER "+model.QuoteIdentifier(triggerName)+";")
+	}
+	statements = append(statements, ensureSemicolon(createSQL))
 	if len(commonColumns) > 0 {
 		columns := strings.Join(commonColumns, ", ")
 		statements = append(statements, fmt.Sprintf(
@@ -333,13 +357,18 @@ func rebuildTableOperation(desired, actual model.TableDef, schema *model.SchemaM
 		"DROP TABLE "+model.QuoteIdentifier(actual.Name)+";",
 		"ALTER TABLE "+model.QuoteIdentifier(temporaryName)+" RENAME TO "+model.QuoteIdentifier(desired.Name)+";",
 	)
-	for _, index := range schema.Indexes {
+	for _, index := range desiredSchema.Indexes {
 		if index.TableName == desired.Name {
 			statements = append(statements, ensureSemicolon(index.SQL))
 		}
 	}
-	for _, trigger := range schema.Triggers {
+	for _, trigger := range desiredSchema.Triggers {
 		if trigger.TableName == desired.Name {
+			statements = append(statements, ensureSemicolon(trigger.SQL))
+		}
+	}
+	for _, triggerName := range dependentTriggers {
+		if trigger, exists := desiredTriggers[triggerName]; exists {
 			statements = append(statements, ensureSemicolon(trigger.SQL))
 		}
 	}
@@ -360,7 +389,18 @@ func rebuildTableOperation(desired, actual model.TableDef, schema *model.SchemaM
 		desired.Name,
 		risk,
 		strings.Join(statements, "\n"),
-	)
+	), dependentTriggers
+}
+
+func referencesIdentifier(sql, identifier string) bool {
+	for _, token := range strings.FieldsFunc(sql, func(character rune) bool {
+		return !(character == '_' || character >= '0' && character <= '9' || character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z')
+	}) {
+		if strings.EqualFold(token, identifier) {
+			return true
+		}
+	}
+	return false
 }
 
 func columnsEqual(left, right []model.ColumnDef) bool {
