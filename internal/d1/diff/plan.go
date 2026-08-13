@@ -19,7 +19,7 @@ type Summary = sharedplan.Summary
 type Operation = sharedplan.Operation
 
 func BuildPlan(project *projectxml.Project, desired, actual *model.SchemaModel, options Options) Plan {
-	var operations []Operation
+	operations := make([]Operation, 0)
 	rebuiltTables := diffTables(project, desired, actual, options, &operations)
 	diffIndexes(project, desired.Indexes, actual.Indexes, rebuiltTables, options, &operations)
 	diffViews(project, desired.Views, actual.Views, options, &operations)

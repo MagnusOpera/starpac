@@ -6,6 +6,11 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### d1pac
+
+- Fixed no-op JSON plans to emit an empty `operations` array instead of
+  `null`, preserving the documented machine-readable plan contract.
+
 ### Starpac
 
 - Fixed signed macOS release uploads under GitHub Actions' Node 24 runtime by

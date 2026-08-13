@@ -128,6 +128,9 @@ func TestBuildPlanEquivalentModelsHaveNoOperations(t *testing.T) {
 	actual := desired
 	actual.SQL = `CREATE TABLE "widgets" ( id integer primary key )`
 	plan := BuildPlan(project, &model.SchemaModel{Tables: []model.TableDef{desired}}, &model.SchemaModel{Tables: []model.TableDef{actual}}, Options{})
+	if plan.Operations == nil {
+		t.Fatal("operations must serialize as an empty array for a no-op plan")
+	}
 	if len(plan.Operations) != 0 {
 		t.Fatalf("unexpected operations: %#v", plan.Operations)
 	}
