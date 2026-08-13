@@ -6,11 +6,15 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.7.2]
+
+
 ### d1pac
 
 - Fixed table rebuilds to refresh triggers on other tables that reference the
   rebuilt table, preventing invalid-schema failures during transactional apply.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.7.1...v0.7.2
 ## [0.7.1]
 
 
