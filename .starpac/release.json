@@ -1,7 +1,7 @@
 {
-  "version": "0.7.2",
-  "previous": "v0.7.1",
-  "commit": "f23386ad08d71e2e89a5ac8a17e75ea11b975a80",
+  "version": "0.7.3",
+  "previous": "v0.7.2",
+  "commit": "48409d67e49a655a119a63161b8cee5c8d7b479d",
   "artifacts": [
     "d1pac"
   ],
