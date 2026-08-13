@@ -178,25 +178,39 @@ func TestBuildPlanRebuildsTableAfterDroppingReferencingTable(t *testing.T) {
 		OnDelete: "CASCADE",
 		Match:    "NONE",
 	}}
+	legacyTrigger := model.TriggerDef{
+		Name:      "legacy_widget_cleanup",
+		TableName: "legacy_events",
+		SQL:       "CREATE TRIGGER legacy_widget_cleanup AFTER DELETE ON legacy_events BEGIN SELECT id FROM widgets; END",
+	}
 
 	plan := BuildPlan(
 		project,
 		&model.SchemaModel{Tables: []model.TableDef{desiredParent}},
-		&model.SchemaModel{Tables: []model.TableDef{actualParent, legacyChild}},
+		&model.SchemaModel{
+			Tables:   []model.TableDef{actualParent, legacyChild},
+			Triggers: []model.TriggerDef{legacyTrigger},
+		},
 		Options{AllowDrop: true},
 	)
 
 	if !plan.Summary.Supported {
 		t.Fatalf("plan must be supported when the referencing table is dropped: %#v", plan.Operations)
 	}
-	if len(plan.Operations) != 2 {
-		t.Fatalf("operations = %#v, want drop and rebuild", plan.Operations)
+	if len(plan.Operations) != 3 {
+		t.Fatalf("operations = %#v, want trigger drop, table drop, and rebuild", plan.Operations)
 	}
-	if plan.Operations[0].Kind != "drop-table" || plan.Operations[0].ObjectKey != "legacy_events" {
+	if plan.Operations[0].Kind != "drop-trigger" || plan.Operations[0].ObjectKey != "legacy_widget_cleanup" {
+		t.Fatalf("obsolete trigger must be dropped first: %#v", plan.Operations)
+	}
+	if plan.Operations[1].Kind != "drop-table" || plan.Operations[1].ObjectKey != "legacy_events" {
 		t.Fatalf("referencing table must be dropped first: %#v", plan.Operations)
 	}
-	if plan.Operations[1].Kind != "rebuild-table" || plan.Operations[1].ObjectKey != "widgets" {
+	if plan.Operations[2].Kind != "rebuild-table" || plan.Operations[2].ObjectKey != "widgets" {
 		t.Fatalf("referenced table must be rebuilt after the drop: %#v", plan.Operations)
+	}
+	if strings.Contains(plan.Operations[2].SQL, "legacy_widget_cleanup") {
+		t.Fatalf("rebuild must not refresh a trigger owned by a dropped table: %s", plan.Operations[2].SQL)
 	}
 }
 

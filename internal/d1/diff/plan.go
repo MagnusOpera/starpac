@@ -330,9 +330,13 @@ func rebuildTableOperation(desired, actual model.TableDef, desiredSchema, actual
 		}
 	}
 	desiredTriggers := triggersByName(desiredSchema.Triggers)
+	desiredTables := tablesByName(desiredSchema.Tables)
 	dependentTriggers := make([]string, 0)
 	for _, trigger := range actualSchema.Triggers {
 		if trigger.TableName == desired.Name || !referencesIdentifier(trigger.SQL, desired.Name) {
+			continue
+		}
+		if _, retained := desiredTables[trigger.TableName]; !retained {
 			continue
 		}
 		dependentTriggers = append(dependentTriggers, trigger.Name)
