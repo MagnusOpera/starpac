@@ -6,6 +6,11 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### d1pac
+
+- Allowed an explicitly authorized table rebuild when every table referencing
+  it is removed earlier in the same deployment plan.
+
 ## [0.7.2]
 
 

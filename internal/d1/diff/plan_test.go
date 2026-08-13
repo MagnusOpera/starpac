@@ -165,6 +165,41 @@ func TestBuildPlanBlocksRebuildOfReferencedTable(t *testing.T) {
 	}
 }
 
+func TestBuildPlanRebuildsTableAfterDroppingReferencingTable(t *testing.T) {
+	project := writableProject()
+	desiredParent := table("widgets", column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"))
+	actualParent := table("widgets", column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"))
+	legacyChild := table("legacy_events", column("widget_id", "INTEGER", true, 0, "widget_id INTEGER NOT NULL"))
+	legacyChild.ForeignKeys = []model.ForeignKeyDef{{
+		Table:    "widgets",
+		From:     "widget_id",
+		To:       "id",
+		OnUpdate: "NO ACTION",
+		OnDelete: "CASCADE",
+		Match:    "NONE",
+	}}
+
+	plan := BuildPlan(
+		project,
+		&model.SchemaModel{Tables: []model.TableDef{desiredParent}},
+		&model.SchemaModel{Tables: []model.TableDef{actualParent, legacyChild}},
+		Options{AllowDrop: true},
+	)
+
+	if !plan.Summary.Supported {
+		t.Fatalf("plan must be supported when the referencing table is dropped: %#v", plan.Operations)
+	}
+	if len(plan.Operations) != 2 {
+		t.Fatalf("operations = %#v, want drop and rebuild", plan.Operations)
+	}
+	if plan.Operations[0].Kind != "drop-table" || plan.Operations[0].ObjectKey != "legacy_events" {
+		t.Fatalf("referencing table must be dropped first: %#v", plan.Operations)
+	}
+	if plan.Operations[1].Kind != "rebuild-table" || plan.Operations[1].ObjectKey != "widgets" {
+		t.Fatalf("referenced table must be rebuilt after the drop: %#v", plan.Operations)
+	}
+}
+
 func TestBuildPlanEquivalentModelsHaveNoOperations(t *testing.T) {
 	project := writableProject()
 	desired := table("widgets", column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"))

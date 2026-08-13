@@ -98,7 +98,7 @@ func diffTables(
 		for _, triggerName := range dependentTriggers {
 			rebuiltTriggers[triggerName] = true
 		}
-		if referencingTables(actual.Tables, name) {
+		if referencingRetainedTables(desired.Tables, actual.Tables, name) {
 			*operations = append(*operations, blocked(
 				rebuild,
 				"automatic rebuild is unsafe because another table references this table",
@@ -453,9 +453,17 @@ func containsForeignKey(foreignKeys []model.ForeignKeyDef, candidate model.Forei
 	return false
 }
 
-func referencingTables(tables []model.TableDef, targetName string) bool {
-	for _, table := range tables {
+func referencingRetainedTables(
+	desiredTables []model.TableDef,
+	actualTables []model.TableDef,
+	targetName string,
+) bool {
+	desiredByName := tablesByName(desiredTables)
+	for _, table := range actualTables {
 		if table.Name == targetName {
+			continue
+		}
+		if _, retained := desiredByName[table.Name]; !retained {
 			continue
 		}
 		for _, foreignKey := range table.ForeignKeys {
