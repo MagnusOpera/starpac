@@ -1,14 +1,19 @@
 {
-  "version": "0.7.0",
-  "previous": "v0.6.3",
-  "commit": "63607e73c8ed672071e838a5a2d83fbc0e17ca83",
+  "version": "0.7.1",
+  "previous": "v0.7.0",
+  "commit": "348c3e7a507ddc57edb5cfe0245de8c49ae8adfe",
   "artifacts": [
-    "pgpac"
+    "pgpac",
+    "d1pac"
   ],
   "reasons": {
     "pgpac": [
-      "internal/postgres/diff/plan.go",
-      "internal/postgres/diff/plan_test.go"
+      ".github/workflows/on-release-published.yml"
+    ],
+    "d1pac": [
+      ".github/workflows/on-release-published.yml",
+      "internal/d1/diff/plan.go",
+      "internal/d1/diff/plan_test.go"
     ]
   }
 }
