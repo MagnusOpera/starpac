@@ -6,11 +6,15 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.7.4]
+
+
 ### d1pac
 
 - Prevented table rebuilds from dropping triggers that were already removed
   with an obsolete owning table earlier in the same plan.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.7.3...v0.7.4
 ## [0.7.3]
 
 
