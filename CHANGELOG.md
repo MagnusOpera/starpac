@@ -6,12 +6,16 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.7.5]
+
+
 ### d1pac
 
 - Clarified blocked referenced-table rebuilds with structured and text
   diagnostics, including a specific non-destructive explanation when a new
   column must be placed before an existing column.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.7.4...v0.7.5
 ## [0.7.4]
 
 
