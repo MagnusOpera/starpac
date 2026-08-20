@@ -2,6 +2,7 @@ package plan
 
 const (
 	RiskSafe        = "safe"
+	RiskMigration   = "migration"
 	RiskDestructive = "destructive"
 )
 
@@ -21,5 +22,6 @@ type Operation struct {
 	ObjectType string `json:"objectType"`
 	ObjectKey  string `json:"objectKey"`
 	Risk       string `json:"risk"`
+	Reason     string `json:"reason,omitempty"`
 	SQL        string `json:"sql"`
 }

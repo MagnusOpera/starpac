@@ -28,6 +28,11 @@ func Text(deploymentPlan plan.Plan) string {
 		output.WriteString("] ")
 		output.WriteString(operation.ObjectKey)
 		output.WriteString("\n")
+		if operation.Reason != "" {
+			output.WriteString("  Reason: ")
+			output.WriteString(operation.Reason)
+			output.WriteString("\n")
+		}
 	}
 	return output.String()
 }

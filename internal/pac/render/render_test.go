@@ -17,11 +17,12 @@ func TestTextAndSQLAreDeterministic(t *testing.T) {
 			Kind:      "blocked-drop-table",
 			ObjectKey: "widgets",
 			Risk:      plan.RiskDestructive,
+			Reason:    "drops are disabled by the project",
 			SQL:       " -- DROP TABLE widgets; ",
 		}},
 	}
 
-	wantText := "Plan status: blocked (contains destructive operations)\nOperations: 1\n- blocked-drop-table [destructive] widgets\n"
+	wantText := "Plan status: blocked (contains destructive operations)\nOperations: 1\n- blocked-drop-table [destructive] widgets\n  Reason: drops are disabled by the project\n"
 	if got := Text(deploymentPlan); got != wantText {
 		t.Fatalf("Text() = %q, want %q", got, wantText)
 	}

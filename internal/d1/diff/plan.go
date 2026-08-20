@@ -98,10 +98,15 @@ func diffTables(
 		for _, triggerName := range dependentTriggers {
 			rebuiltTriggers[triggerName] = true
 		}
-		if referencingRetainedTables(desired.Tables, actual.Tables, name) {
+		referencingTables := referencingRetainedTableNames(desired.Tables, actual.Tables, name)
+		if len(referencingTables) > 0 {
 			*operations = append(*operations, blocked(
 				rebuild,
-				"automatic rebuild is unsafe because another table references this table",
+				referencedTableRebuildReason(
+					desiredTable,
+					actualTable,
+					referencingTables,
+				),
 			))
 			continue
 		}
@@ -297,14 +302,91 @@ func additiveColumns(desired, actual model.TableDef) ([]model.ColumnDef, bool) {
 	}
 	additions := desired.Columns[len(actual.Columns):]
 	for _, column := range additions {
-		if column.Definition == "" || column.PrimaryKey > 0 || column.Hidden != 0 {
-			return nil, false
-		}
-		if column.NotNull && column.DefaultSQL == nil {
+		if !addableColumn(column) {
 			return nil, false
 		}
 	}
 	return additions, true
+}
+
+func referencedTableRebuildReason(
+	desired model.TableDef,
+	actual model.TableDef,
+	referencingTables []string,
+) string {
+	insertedColumns, ok := nonTrailingColumnAdditions(desired, actual)
+	if ok {
+		return fmt.Sprintf(
+			"non-destructive migration must rebuild the table to place new column(s) %s in the declared order; automatic rebuild is unsafe because retained table(s) %s reference this table",
+			quotedNames(insertedColumns),
+			quotedNames(referencingTables),
+		)
+	}
+	return fmt.Sprintf(
+		"automatic rebuild is unsafe because retained table(s) %s reference this table",
+		quotedNames(referencingTables),
+	)
+}
+
+func nonTrailingColumnAdditions(desired, actual model.TableDef) ([]string, bool) {
+	if len(actual.Columns) >= len(desired.Columns) {
+		return nil, false
+	}
+	if !stringSlicesEqual(model.TableConstraints(desired.SQL), model.TableConstraints(actual.SQL)) {
+		return nil, false
+	}
+	for _, foreignKey := range actual.ForeignKeys {
+		if !containsForeignKey(desired.ForeignKeys, foreignKey) {
+			return nil, false
+		}
+	}
+
+	insertedColumns := make([]string, 0)
+	desiredIndex := 0
+	for _, actualColumn := range actual.Columns {
+		for desiredIndex < len(desired.Columns) && desired.Columns[desiredIndex].Name != actualColumn.Name {
+			if !addableColumn(desired.Columns[desiredIndex]) {
+				return nil, false
+			}
+			insertedColumns = append(insertedColumns, desired.Columns[desiredIndex].Name)
+			desiredIndex++
+		}
+		if desiredIndex == len(desired.Columns) {
+			return nil, false
+		}
+		desiredColumn := desired.Columns[desiredIndex]
+		if !columnEqual(desiredColumn, actualColumn) {
+			return nil, false
+		}
+		if model.NormalizeDDL(desiredColumn.Definition) != model.NormalizeDDL(actualColumn.Definition) {
+			return nil, false
+		}
+		desiredIndex++
+	}
+	for ; desiredIndex < len(desired.Columns); desiredIndex++ {
+		if !addableColumn(desired.Columns[desiredIndex]) {
+			return nil, false
+		}
+	}
+	if len(insertedColumns) == 0 {
+		return nil, false
+	}
+	return insertedColumns, true
+}
+
+func addableColumn(column model.ColumnDef) bool {
+	if column.Definition == "" || column.PrimaryKey > 0 || column.Hidden != 0 {
+		return false
+	}
+	return !column.NotNull || column.DefaultSQL != nil
+}
+
+func quotedNames(names []string) string {
+	quoted := make([]string, 0, len(names))
+	for _, name := range names {
+		quoted = append(quoted, fmt.Sprintf("%q", name))
+	}
+	return strings.Join(quoted, ", ")
 }
 
 func rebuildTableOperation(desired, actual model.TableDef, desiredSchema, actualSchema *model.SchemaModel) (Operation, []string) {
@@ -457,12 +539,13 @@ func containsForeignKey(foreignKeys []model.ForeignKeyDef, candidate model.Forei
 	return false
 }
 
-func referencingRetainedTables(
+func referencingRetainedTableNames(
 	desiredTables []model.TableDef,
 	actualTables []model.TableDef,
 	targetName string,
-) bool {
+) []string {
 	desiredByName := tablesByName(desiredTables)
+	referencingTables := make([]string, 0)
 	for _, table := range actualTables {
 		if table.Name == targetName {
 			continue
@@ -472,11 +555,13 @@ func referencingRetainedTables(
 		}
 		for _, foreignKey := range table.ForeignKeys {
 			if foreignKey.Table == targetName {
-				return true
+				referencingTables = append(referencingTables, table.Name)
+				break
 			}
 		}
 	}
-	return false
+	sort.Strings(referencingTables)
+	return referencingTables
 }
 
 func stringSlicesEqual(left, right []string) bool {
@@ -517,6 +602,7 @@ func appendDrop(project *projectxml.Project, options Options, operations *[]Oper
 
 func blocked(item Operation, reason string) Operation {
 	item.Kind = "blocked-" + item.Kind
+	item.Reason = reason
 	if item.SQL != "" {
 		item.SQL = "-- " + reason + "\n-- " + strings.ReplaceAll(item.SQL, "\n", "\n-- ")
 	} else {

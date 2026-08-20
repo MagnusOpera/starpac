@@ -6,6 +6,12 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### d1pac
+
+- Clarified blocked referenced-table rebuilds with structured and text
+  diagnostics, including a specific non-destructive explanation when a new
+  column must be placed before an existing column.
+
 ## [0.7.4]
 
 

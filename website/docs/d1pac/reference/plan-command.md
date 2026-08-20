@@ -18,5 +18,7 @@ d1pac plan \
 `CLOUDFLARE_API_TOKEN` and can be supplied with `--api-token` when necessary.
 
 Plans contain summary metadata and ordered operations with a kind, object
-type, object key, risk, and executable or blocked SQL. `--script` writes the
+type, object key, risk, an optional reason for blocked operations, and
+executable or blocked SQL. Text output prints the reason directly beneath a
+blocked operation. `--script` writes the
 complete SQL preview without changing the database.

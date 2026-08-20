@@ -160,8 +160,63 @@ func TestBuildPlanBlocksRebuildOfReferencedTable(t *testing.T) {
 	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "blocked-rebuild-table" {
 		t.Fatalf("unexpected operations: %#v", plan.Operations)
 	}
-	if !strings.Contains(plan.Operations[0].SQL, "another table references") {
-		t.Fatalf("unexpected blocked SQL: %s", plan.Operations[0].SQL)
+	if !strings.Contains(plan.Operations[0].Reason, `retained table(s) "events" reference this table`) {
+		t.Fatalf("unexpected block reason: %s", plan.Operations[0].Reason)
+	}
+}
+
+func TestBuildPlanExplainsBlockedNonTrailingColumnAddition(t *testing.T) {
+	project := writableProject()
+	desiredParent := table(
+		"artifacts",
+		column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"),
+		column("build_duration_ms", "INTEGER", false, 0, "build_duration_ms INTEGER"),
+		column("created_at", "TEXT", true, 0, "created_at TEXT NOT NULL"),
+	)
+	actualParent := table(
+		"artifacts",
+		column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"),
+		column("created_at", "TEXT", true, 0, "created_at TEXT NOT NULL"),
+	)
+	child := table(
+		"build_artifacts",
+		column("artifact_id", "TEXT", true, 0, "artifact_id TEXT NOT NULL"),
+	)
+	child.ForeignKeys = []model.ForeignKeyDef{{
+		Table:    "artifacts",
+		From:     "artifact_id",
+		To:       "id",
+		OnUpdate: "NO ACTION",
+		OnDelete: "CASCADE",
+		Match:    "NONE",
+	}}
+
+	plan := BuildPlan(
+		project,
+		&model.SchemaModel{Tables: []model.TableDef{child, desiredParent}},
+		&model.SchemaModel{Tables: []model.TableDef{child, actualParent}},
+		Options{AllowDrop: true},
+	)
+
+	if len(plan.Operations) != 1 {
+		t.Fatalf("operations = %#v, want one blocked rebuild", plan.Operations)
+	}
+	operation := plan.Operations[0]
+	if operation.Kind != "blocked-rebuild-table" || operation.Risk != "migration" {
+		t.Fatalf("operation = %#v, want blocked non-destructive migration", operation)
+	}
+	if plan.Summary.Destructive {
+		t.Fatal("non-trailing column addition must not be classified as destructive")
+	}
+	for _, expected := range []string{
+		"non-destructive migration",
+		`"build_duration_ms"`,
+		"declared order",
+		`"build_artifacts"`,
+	} {
+		if !strings.Contains(operation.Reason, expected) {
+			t.Fatalf("reason %q does not contain %q", operation.Reason, expected)
+		}
 	}
 }
 
