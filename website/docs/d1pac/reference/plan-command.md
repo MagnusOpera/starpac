@@ -11,7 +11,8 @@ d1pac plan \
   --database <name-or-uuid> \
   [--format text|json] \
   [--script <file>] \
-  [--allow-drop]
+  [--allow-drop] \
+  [--strict]
 ```
 
 `--account-id` defaults to `CLOUDFLARE_ACCOUNT_ID`. The API token defaults to
@@ -22,3 +23,10 @@ type, object key, risk, an optional reason for blocked operations, and
 executable or blocked SQL. Text output prints the reason directly beneath a
 blocked operation. `--script` writes the
 complete SQL preview without changing the database.
+
+By default, table comparison is column-order independent. An addable column is
+appended with SQLite's `ALTER TABLE ... ADD COLUMN` even when it appears before
+an existing column in the desired SQL. Later plans treat the resulting physical
+column order as equivalent. Pass `--strict` to require the live column order to
+match the desired declaration order; mismatches then use the normal table
+rebuild and safety rules.

@@ -13,8 +13,8 @@ recreate its indexes and triggers.
 | --- | --- | --- |
 | Create table | Native | `CREATE TABLE`; requires `AllowCreate`. |
 | Drop table | Destructive | `DROP TABLE`; requires drop authorization. |
-| Add trailing nullable/defaulted column | Native | `ALTER TABLE ... ADD COLUMN`; requires `AllowAlter`. |
-| Other column additions | Migration | Table rebuild; new constraints and defaults are validated. |
+| Add nullable/defaulted column | Native | `ALTER TABLE ... ADD COLUMN`; physical placement is always trailing and requires `AllowAlter`. |
+| Add column in strict mode before an existing column | Migration | Table rebuild to preserve declared order; new constraints and defaults are validated. |
 | Drop column | Destructive | Table rebuild copying remaining same-named columns; requires drop authorization. |
 | Change type, default, or nullability | Migration | Table rebuild copying same-named values into the desired definition. |
 | Rename a column | Not inferred | Treated as an added column plus a removed column; the old values are not copied. |
@@ -44,6 +44,7 @@ recreate its indexes and triggers.
 - `AllowCreate` controls new objects.
 - `AllowAlter` controls direct alterations, replacements, and table rebuilds.
 - `AllowDrop` or `--allow-drop` controls removed objects and columns.
+- Column order is ignored by default. `--strict` requires exact declared order.
 - Disabled or unsafe operations remain visible as commented `blocked-*` plan
   entries.
 - `UseTransaction="true"` submits the change as one batch; existing values must

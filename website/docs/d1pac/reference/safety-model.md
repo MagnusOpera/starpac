@@ -19,11 +19,13 @@ Creating a table, index, view, or trigger requires `AllowCreate="true"`.
 Replacing an index, view, or trigger requires `AllowAlter="true"` and is
 classified as safe.
 
-A column is added with `ALTER TABLE ... ADD COLUMN` only when it follows the
-existing columns, is not a primary-key or hidden column, and either is nullable
-or has a default. Other column additions use the rebuild path. Additive and
-migration operations are emitted as blocked SQL when the corresponding project
-permission is disabled.
+A column is added with `ALTER TABLE ... ADD COLUMN` when it is not a primary-key
+or hidden column and either is nullable or has a default. SQLite physically
+appends the column, and default comparisons ignore column order so a later plan
+does not report drift when the desired declaration placed it earlier. Pass
+`--strict` to require declaration order; a non-trailing addition then uses the
+rebuild path. Additive and migration operations are emitted as blocked SQL when
+the corresponding project permission is disabled.
 
 ## Destructive operations
 

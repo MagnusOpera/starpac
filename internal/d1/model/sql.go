@@ -41,6 +41,18 @@ func TableConstraints(createTableSQL string) []string {
 	return constraints
 }
 
+func TableOptions(createTableSQL string) string {
+	open := strings.Index(createTableSQL, "(")
+	if open == -1 {
+		return ""
+	}
+	close := findMatchingParenthesis(createTableSQL, open)
+	if close == -1 {
+		return ""
+	}
+	return NormalizeDDL(createTableSQL[close+1:])
+}
+
 func ReplaceCreateTableName(createTableSQL, replacement string) (string, bool) {
 	upper := strings.ToUpper(createTableSQL)
 	position := strings.Index(upper, "CREATE TABLE")

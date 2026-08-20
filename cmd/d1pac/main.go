@@ -100,6 +100,7 @@ func runPlan(ctx context.Context, arguments []string) error {
 	format := flags.String("format", "text", "Output format: text or json")
 	scriptPath := flags.String("script", "", "Optional path to write the SQL preview")
 	allowDrop := flags.Bool("allow-drop", false, "Allow destructive operations to be rendered as executable SQL")
+	strict := flags.Bool("strict", false, "Require declared table column order to match the live schema")
 	target := addTargetFlags(flags)
 	if err := flags.Parse(arguments); err != nil {
 		return err
@@ -119,7 +120,10 @@ func runPlan(ctx context.Context, arguments []string) error {
 	if err != nil {
 		return err
 	}
-	plan := diff.BuildPlan(pkg.Project, pkg.Model, actual, diff.Options{AllowDrop: *allowDrop})
+	plan := diff.BuildPlan(pkg.Project, pkg.Model, actual, diff.Options{
+		AllowDrop: *allowDrop,
+		Strict:    *strict,
+	})
 	return sharedcli.WritePlan(stdout, *format, *scriptPath, plan)
 }
 
@@ -128,6 +132,7 @@ func runApply(ctx context.Context, arguments []string) error {
 	packagePath := flags.String("package", "", "Path to a .d1pkg package")
 	allowDrop := flags.Bool("allow-drop", false, "Allow destructive operations")
 	force := flags.Bool("force", false, "Bypass destructive-operation protection")
+	strict := flags.Bool("strict", false, "Require declared table column order to match the live schema")
 	target := addTargetFlags(flags)
 	if err := flags.Parse(arguments); err != nil {
 		return err
@@ -149,6 +154,7 @@ func runApply(ctx context.Context, arguments []string) error {
 	}
 	plan := diff.BuildPlan(pkg.Project, pkg.Model, actual, diff.Options{
 		AllowDrop: *allowDrop || *force,
+		Strict:    *strict,
 	})
 	if err := apply.Execute(ctx, client, pkg.Project, plan, apply.Options{
 		AllowDrop: *allowDrop,
@@ -184,8 +190,8 @@ func resolvePackageOutput(outputPath, packageID string) (string, error) {
 
 func printUsage() {
 	fmt.Fprintln(stdout, "d1pac build --project <file.d1pac> --output <dir-or-file>")
-	fmt.Fprintln(stdout, "d1pac plan --package <file.d1pkg> --account-id <id> --database <name-or-id> [--format text|json] [--script <file>] [--allow-drop]")
-	fmt.Fprintln(stdout, "d1pac apply --package <file.d1pkg> --account-id <id> --database <name-or-id> [--allow-drop] [--force]")
+	fmt.Fprintln(stdout, "d1pac plan --package <file.d1pkg> --account-id <id> --database <name-or-id> [--format text|json] [--script <file>] [--allow-drop] [--strict]")
+	fmt.Fprintln(stdout, "d1pac apply --package <file.d1pkg> --account-id <id> --database <name-or-id> [--allow-drop] [--force] [--strict]")
 	fmt.Fprintln(stdout, "d1pac version")
 	fmt.Fprintln(stdout, "d1pac --version")
 }

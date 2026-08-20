@@ -12,6 +12,7 @@ import (
 
 type Options struct {
 	AllowDrop bool
+	Strict    bool
 }
 
 type Plan = sharedplan.Plan
@@ -74,10 +75,10 @@ func diffTables(
 			))
 			continue
 		}
-		if tableEqual(desiredTable, actualTable) {
+		if tableEqual(desiredTable, actualTable, options.Strict) {
 			continue
 		}
-		if additions, ok := additiveColumns(desiredTable, actualTable); ok {
+		if additions, ok := additiveColumns(desiredTable, actualTable, options.Strict); ok {
 			for _, column := range additions {
 				appendAlter(project, operations, operation(
 					"alter-table-add-column",
@@ -270,37 +271,74 @@ func diffTriggers(
 	}
 }
 
-func tableEqual(desired, actual model.TableDef) bool {
-	if !columnsEqual(desired.Columns, actual.Columns) {
+func tableEqual(desired, actual model.TableDef, strict bool) bool {
+	if strict {
+		return columnsEqual(desired.Columns, actual.Columns) &&
+			foreignKeysEqual(desired.ForeignKeys, actual.ForeignKeys) &&
+			model.NormalizeDDL(desired.SQL) == model.NormalizeDDL(actual.SQL)
+	}
+	if !columnsEqualByName(desired.Columns, actual.Columns) {
 		return false
 	}
-	if !foreignKeysEqual(desired.ForeignKeys, actual.ForeignKeys) {
+	if !foreignKeysEqualByDefinition(desired.ForeignKeys, actual.ForeignKeys) {
 		return false
 	}
-	return model.NormalizeDDL(desired.SQL) == model.NormalizeDDL(actual.SQL)
+	return stringSlicesEqual(model.TableConstraints(desired.SQL), model.TableConstraints(actual.SQL)) &&
+		model.TableOptions(desired.SQL) == model.TableOptions(actual.SQL)
 }
 
-func additiveColumns(desired, actual model.TableDef) ([]model.ColumnDef, bool) {
+func additiveColumns(desired, actual model.TableDef, strict bool) ([]model.ColumnDef, bool) {
 	if len(actual.Columns) >= len(desired.Columns) {
 		return nil, false
 	}
-	for index := range actual.Columns {
-		if !columnEqual(desired.Columns[index], actual.Columns[index]) {
-			return nil, false
-		}
-		if model.NormalizeDDL(desired.Columns[index].Definition) != model.NormalizeDDL(actual.Columns[index].Definition) {
-			return nil, false
+	if strict {
+		for index := range actual.Columns {
+			if !columnEqual(desired.Columns[index], actual.Columns[index]) ||
+				!columnDefinitionsEqual(desired.Columns[index], actual.Columns[index]) {
+				return nil, false
+			}
 		}
 	}
 	if !stringSlicesEqual(model.TableConstraints(desired.SQL), model.TableConstraints(actual.SQL)) {
 		return nil, false
 	}
+	if model.TableOptions(desired.SQL) != model.TableOptions(actual.SQL) {
+		return nil, false
+	}
 	for _, foreignKey := range actual.ForeignKeys {
-		if !containsForeignKey(desired.ForeignKeys, foreignKey) {
+		if strict && !containsForeignKey(desired.ForeignKeys, foreignKey) {
+			return nil, false
+		}
+		if !strict && !containsForeignKeyDefinition(desired.ForeignKeys, foreignKey) {
 			return nil, false
 		}
 	}
-	additions := desired.Columns[len(actual.Columns):]
+	if strict {
+		additions := desired.Columns[len(actual.Columns):]
+		for _, column := range additions {
+			if !addableColumn(column) {
+				return nil, false
+			}
+		}
+		return additions, true
+	}
+
+	desiredByName := columnsByName(desired.Columns)
+	actualByName := columnsByName(actual.Columns)
+	for _, actualColumn := range actual.Columns {
+		desiredColumn, exists := desiredByName[actualColumn.Name]
+		if !exists || !columnEqualIgnoringPosition(desiredColumn, actualColumn) ||
+			!columnDefinitionsEqual(desiredColumn, actualColumn) {
+			return nil, false
+		}
+	}
+	additions := make([]model.ColumnDef, 0, len(desired.Columns)-len(actual.Columns))
+	for _, column := range desired.Columns {
+		if _, exists := actualByName[column.Name]; exists {
+			continue
+		}
+		additions = append(additions, column)
+	}
 	for _, column := range additions {
 		if !addableColumn(column) {
 			return nil, false
@@ -501,14 +539,45 @@ func columnsEqual(left, right []model.ColumnDef) bool {
 	return true
 }
 
+func columnsEqualByName(left, right []model.ColumnDef) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	rightByName := columnsByName(right)
+	for _, leftColumn := range left {
+		rightColumn, exists := rightByName[leftColumn.Name]
+		if !exists || !columnEqualIgnoringPosition(leftColumn, rightColumn) ||
+			!columnDefinitionsEqual(leftColumn, rightColumn) {
+			return false
+		}
+	}
+	return true
+}
+
+func columnsByName(columns []model.ColumnDef) map[string]model.ColumnDef {
+	byName := make(map[string]model.ColumnDef, len(columns))
+	for _, column := range columns {
+		byName[column.Name] = column
+	}
+	return byName
+}
+
 func columnEqual(left, right model.ColumnDef) bool {
 	return left.Position == right.Position &&
-		left.Name == right.Name &&
+		columnEqualIgnoringPosition(left, right)
+}
+
+func columnEqualIgnoringPosition(left, right model.ColumnDef) bool {
+	return left.Name == right.Name &&
 		strings.EqualFold(strings.TrimSpace(left.Type), strings.TrimSpace(right.Type)) &&
 		left.NotNull == right.NotNull &&
 		normalizeOptionalSQL(left.DefaultSQL) == normalizeOptionalSQL(right.DefaultSQL) &&
 		left.PrimaryKey == right.PrimaryKey &&
 		left.Hidden == right.Hidden
+}
+
+func columnDefinitionsEqual(left, right model.ColumnDef) bool {
+	return model.NormalizeDDL(left.Definition) == model.NormalizeDDL(right.Definition)
 }
 
 func normalizeOptionalSQL(value *string) string {
@@ -530,6 +599,27 @@ func foreignKeysEqual(left, right []model.ForeignKeyDef) bool {
 	return true
 }
 
+func foreignKeysEqualByDefinition(left, right []model.ForeignKeyDef) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	matched := make([]bool, len(right))
+	for _, leftForeignKey := range left {
+		found := false
+		for index, rightForeignKey := range right {
+			if !matched[index] && foreignKeyDefinitionEqual(leftForeignKey, rightForeignKey) {
+				matched[index] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func containsForeignKey(foreignKeys []model.ForeignKeyDef, candidate model.ForeignKeyDef) bool {
 	for _, foreignKey := range foreignKeys {
 		if foreignKey == candidate {
@@ -537,6 +627,24 @@ func containsForeignKey(foreignKeys []model.ForeignKeyDef, candidate model.Forei
 		}
 	}
 	return false
+}
+
+func containsForeignKeyDefinition(foreignKeys []model.ForeignKeyDef, candidate model.ForeignKeyDef) bool {
+	for _, foreignKey := range foreignKeys {
+		if foreignKeyDefinitionEqual(foreignKey, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func foreignKeyDefinitionEqual(left, right model.ForeignKeyDef) bool {
+	return left.Table == right.Table &&
+		left.From == right.From &&
+		left.To == right.To &&
+		left.OnUpdate == right.OnUpdate &&
+		left.OnDelete == right.OnDelete &&
+		left.Match == right.Match
 }
 
 func referencingRetainedTableNames(

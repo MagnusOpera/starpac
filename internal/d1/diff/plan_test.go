@@ -44,6 +44,76 @@ func TestBuildPlanAddsTrailingColumn(t *testing.T) {
 	}
 }
 
+func TestBuildPlanAppendsAddableColumnRegardlessOfDeclaredOrder(t *testing.T) {
+	project := writableProject()
+	desired := table(
+		"widgets",
+		column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"),
+		column("description", "TEXT", false, 0, "description TEXT"),
+		column("created_at", "TEXT", true, 0, "created_at TEXT NOT NULL"),
+	)
+	actual := table(
+		"widgets",
+		column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"),
+		column("created_at", "TEXT", true, 0, "created_at TEXT NOT NULL"),
+	)
+
+	plan := BuildPlan(
+		project,
+		&model.SchemaModel{Tables: []model.TableDef{desired}},
+		&model.SchemaModel{Tables: []model.TableDef{actual}},
+		Options{},
+	)
+
+	if !plan.Summary.Supported || len(plan.Operations) != 1 {
+		t.Fatalf("operations = %#v, want one supported addition", plan.Operations)
+	}
+	operation := plan.Operations[0]
+	if operation.Kind != "alter-table-add-column" || operation.Risk != "safe" {
+		t.Fatalf("operation = %#v, want safe column addition", operation)
+	}
+	if operation.SQL != `ALTER TABLE "widgets" ADD COLUMN description TEXT;` {
+		t.Fatalf("unexpected SQL: %s", operation.SQL)
+	}
+}
+
+func TestBuildPlanIgnoresColumnOrderAfterAppend(t *testing.T) {
+	project := writableProject()
+	desired := table(
+		"widgets",
+		positionedColumn(0, "id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"),
+		positionedColumn(1, "description", "TEXT", false, 0, "description TEXT"),
+		positionedColumn(2, "created_at", "TEXT", true, 0, "created_at TEXT NOT NULL"),
+	)
+	actual := table(
+		"widgets",
+		positionedColumn(0, "id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"),
+		positionedColumn(1, "created_at", "TEXT", true, 0, "created_at TEXT NOT NULL"),
+		positionedColumn(2, "description", "TEXT", false, 0, "description TEXT"),
+	)
+
+	plan := BuildPlan(
+		project,
+		&model.SchemaModel{Tables: []model.TableDef{desired}},
+		&model.SchemaModel{Tables: []model.TableDef{actual}},
+		Options{},
+	)
+
+	if len(plan.Operations) != 0 {
+		t.Fatalf("column order produced drift: %#v", plan.Operations)
+	}
+
+	strictPlan := BuildPlan(
+		project,
+		&model.SchemaModel{Tables: []model.TableDef{desired}},
+		&model.SchemaModel{Tables: []model.TableDef{actual}},
+		Options{Strict: true},
+	)
+	if len(strictPlan.Operations) != 1 || strictPlan.Operations[0].Kind != "rebuild-table" {
+		t.Fatalf("strict operations = %#v, want a table rebuild", strictPlan.Operations)
+	}
+}
+
 func TestBuildPlanRebuildPreservesCommonColumnsAndDependentObjects(t *testing.T) {
 	project := writableProject()
 	desiredTable := table(
@@ -195,7 +265,7 @@ func TestBuildPlanExplainsBlockedNonTrailingColumnAddition(t *testing.T) {
 		project,
 		&model.SchemaModel{Tables: []model.TableDef{child, desiredParent}},
 		&model.SchemaModel{Tables: []model.TableDef{child, actualParent}},
-		Options{AllowDrop: true},
+		Options{AllowDrop: true, Strict: true},
 	)
 
 	if len(plan.Operations) != 1 {
@@ -310,6 +380,12 @@ func column(name, dataType string, notNull bool, primaryKey int, definition stri
 		PrimaryKey: primaryKey,
 		Definition: definition,
 	}
+}
+
+func positionedColumn(position int, name, dataType string, notNull bool, primaryKey int, definition string) model.ColumnDef {
+	column := column(name, dataType, notNull, primaryKey, definition)
+	column.Position = position
+	return column
 }
 
 func columnWithDefault(name, dataType string, notNull bool, defaultSQL, definition string) model.ColumnDef {

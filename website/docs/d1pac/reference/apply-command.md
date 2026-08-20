@@ -11,7 +11,8 @@ d1pac apply \
   --account-id <cloudflare-account-id> \
   --database <name-or-uuid> \
   [--allow-drop] \
-  [--force]
+  [--force] \
+  [--strict]
 ```
 
 When `UseTransaction="true"`, executable operations are sent as one D1 batch.
@@ -21,6 +22,8 @@ rebuilds are checked at the end of the deployment.
 
 - `--allow-drop` explicitly authorizes destructive operations.
 - `--force` bypasses the destructive-operation guard.
+- `--strict` requires live table column order to match the desired declaration
+  order. Without it, column order is ignored and addable columns are appended.
 - Blocked and comment-only operations are never executed.
 
 Apply talks directly to the administrative Cloudflare API. It does not modify

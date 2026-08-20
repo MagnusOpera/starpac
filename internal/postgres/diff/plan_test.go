@@ -81,6 +81,52 @@ func TestBuildPlanAddsColumnIncrementally(t *testing.T) {
 	}
 }
 
+func TestBuildPlanAddsNonTrailingColumnIncrementally(t *testing.T) {
+	project := writablePostgresProject()
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid, version integer NOT NULL DEFAULT 1, name text)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid, "name" text)`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+
+	if len(plan.Operations) != 1 {
+		t.Fatalf("expected 1 operation, got %#v", plan.Operations)
+	}
+	if got, want := plan.Operations[0].Kind, "alter-table-add-column"; got != want {
+		t.Fatalf("operation kind = %q, want %q", got, want)
+	}
+	if got, want := plan.Operations[0].SQL, `ALTER TABLE "app"."widgets" ADD COLUMN version integer NOT NULL DEFAULT 1;`; got != want {
+		t.Fatalf("operation SQL = %q, want %q", got, want)
+	}
+}
+
+func TestBuildPlanIgnoresColumnOrder(t *testing.T) {
+	project := writablePostgresProject()
+	desired := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    "CREATE TABLE app.widgets (id uuid, version integer, name text)",
+	}}}
+	actual := &model.SchemaModel{Tables: []model.TableDef{{
+		Schema: "app",
+		Name:   "widgets",
+		SQL:    `CREATE TABLE "app"."widgets" ("id" uuid, "name" text, "version" integer)`,
+	}}}
+
+	plan := BuildPlan(project, desired, actual, Options{})
+
+	if len(plan.Operations) != 0 {
+		t.Fatalf("column order produced drift: %#v", plan.Operations)
+	}
+}
+
 func TestBuildPlanDropsColumnIncrementallyWhenAuthorized(t *testing.T) {
 	project := writablePostgresProject()
 	desired := &model.SchemaModel{Tables: []model.TableDef{{

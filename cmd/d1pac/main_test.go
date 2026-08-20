@@ -27,6 +27,9 @@ func TestRunHelpMentionsCommands(t *testing.T) {
 			t.Fatalf("help does not mention %q: %s", command, output)
 		}
 	}
+	if strings.Count(output, "[--strict]") != 2 {
+		t.Fatalf("help must mention strict mode for plan and apply: %s", output)
+	}
 }
 
 func TestRunBuildCreatesPackage(t *testing.T) {

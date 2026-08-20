@@ -25,6 +25,14 @@ CREATE TABLE widgets (
 	}
 }
 
+func TestTableOptionsIgnoresColumnsButPreservesTableMode(t *testing.T) {
+	left := TableOptions(`CREATE TABLE widgets (id INTEGER, name TEXT) STRICT;`)
+	right := TableOptions(`CREATE TABLE widgets (name TEXT, id INTEGER) strict`)
+	if left != right || left != "strict" {
+		t.Fatalf("table options differ: %q != %q", left, right)
+	}
+}
+
 func TestReplaceCreateTableNamePreservesDefinition(t *testing.T) {
 	rewritten, ok := ReplaceCreateTableName(`CREATE TABLE "widgets" (id INTEGER) STRICT`, "__new_widgets")
 	if !ok {

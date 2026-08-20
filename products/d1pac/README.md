@@ -57,7 +57,9 @@ Projects use the `.d1pac` extension and describe the desired schema state:
 - Desired SQL is compiled offline in an isolated SQLite database.
 - Live tables, columns, foreign keys, indexes, views, and triggers are
   introspected through the Cloudflare D1 REST API.
-- Additive columns are emitted as `ALTER TABLE ... ADD COLUMN` operations.
+- Additive columns are emitted as trailing `ALTER TABLE ... ADD COLUMN`
+  operations regardless of declared position. Column order is ignored by
+  default; `--strict` enables exact order comparison.
 - Other compatible table changes use SQLite's create/copy/drop/rename rebuild
   pattern while preserving common columns and recreating indexes and triggers.
 - Removed columns and objects are destructive and remain blocked unless drops

@@ -6,6 +6,17 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### d1pac
+
+- Made table comparison column-order independent by default so addable columns
+  can use `ALTER TABLE ... ADD COLUMN` regardless of their declared position,
+  with `--strict` available for exact declaration-order enforcement.
+
+### pgpac
+
+- Added regression coverage for non-trailing column additions and
+  column-order-independent table comparison.
+
 ## [0.7.5]
 
 
