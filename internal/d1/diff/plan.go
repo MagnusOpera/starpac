@@ -95,12 +95,27 @@ func diffTables(
 			continue
 		}
 		rebuilt[name] = true
+		referencingTables := referencingRetainedTableNames(desired.Tables, actual.Tables, name)
 		rebuild, dependentTriggers := rebuildTableOperation(desiredTable, actualTable, desired, actual)
+		if len(referencingTables) > 0 && project.Target.Apply.UseTransaction {
+			var reason string
+			rebuild, dependentTriggers, reason = rebuildReferencedTableOperation(
+				desiredTable,
+				actualTable,
+				referencingTables,
+				desired,
+				actual,
+				options.Strict,
+			)
+			if reason != "" {
+				*operations = append(*operations, blocked(rebuild, reason))
+				continue
+			}
+		}
 		for _, triggerName := range dependentTriggers {
 			rebuiltTriggers[triggerName] = true
 		}
-		referencingTables := referencingRetainedTableNames(desired.Tables, actual.Tables, name)
-		if len(referencingTables) > 0 {
+		if len(referencingTables) > 0 && !project.Target.Apply.UseTransaction {
 			*operations = append(*operations, blocked(
 				rebuild,
 				referencedTableRebuildReason(
@@ -131,6 +146,169 @@ func diffTables(
 		appendDrop(project, options, operations, drop)
 	}
 	return rebuilt, rebuiltTriggers
+}
+
+func rebuildReferencedTableOperation(
+	desired model.TableDef,
+	actual model.TableDef,
+	referencingTables []string,
+	desiredSchema *model.SchemaModel,
+	actualSchema *model.SchemaModel,
+	strict bool,
+) (Operation, []string, string) {
+	desiredTables := tablesByName(desiredSchema.Tables)
+	actualTables := tablesByName(actualSchema.Tables)
+	for _, tableName := range referencingTables {
+		desiredReferencingTable := desiredTables[tableName]
+		actualReferencingTable := actualTables[tableName]
+		if !tableEqual(desiredReferencingTable, actualReferencingTable, strict) {
+			return operation("rebuild-table", "table", desired.Name, "migration", ""), nil,
+				fmt.Sprintf("transactional rebuild cannot also reconcile changes to referencing table %q", tableName)
+		}
+		dependents := referencingRetainedTableNames(
+			desiredSchema.Tables,
+			actualSchema.Tables,
+			tableName,
+		)
+		for _, dependent := range dependents {
+			if dependent != desired.Name {
+				return operation("rebuild-table", "table", desired.Name, "migration", ""), nil,
+					fmt.Sprintf("transactional rebuild requires unsupported nested foreign-key rebuild through table %q", tableName)
+			}
+		}
+	}
+
+	rebuiltNames := map[string]bool{desired.Name: true}
+	for _, tableName := range referencingTables {
+		rebuiltNames[tableName] = true
+	}
+	desiredTriggers := triggersByName(desiredSchema.Triggers)
+	dependentTriggers := make([]string, 0)
+	for _, trigger := range actualSchema.Triggers {
+		if rebuiltNames[trigger.TableName] {
+			continue
+		}
+		for rebuiltName := range rebuiltNames {
+			if referencesIdentifier(trigger.SQL, rebuiltName) {
+				dependentTriggers = append(dependentTriggers, trigger.Name)
+				break
+			}
+		}
+	}
+	sort.Strings(dependentTriggers)
+	desiredViews := viewsByName(desiredSchema.Views)
+	dependentViews := make([]string, 0)
+	for _, view := range actualSchema.Views {
+		if _, retained := desiredViews[view.Name]; !retained {
+			continue
+		}
+		for rebuiltName := range rebuiltNames {
+			if referencesIdentifier(view.SQL, rebuiltName) {
+				dependentViews = append(dependentViews, view.Name)
+				break
+			}
+		}
+	}
+	sort.Strings(dependentViews)
+
+	statements := make([]string, 0)
+	for _, triggerName := range dependentTriggers {
+		statements = append(statements, "DROP TRIGGER "+model.QuoteIdentifier(triggerName)+";")
+	}
+	for _, viewName := range dependentViews {
+		statements = append(statements, "DROP VIEW "+model.QuoteIdentifier(viewName)+";")
+	}
+
+	oldParentName := "__d1pac_" + desired.Name + "_old"
+	statements = append(statements,
+		"ALTER TABLE "+model.QuoteIdentifier(actual.Name)+" RENAME TO "+model.QuoteIdentifier(oldParentName)+";",
+		ensureSemicolon(desired.SQL),
+	)
+	statements = appendCopyColumns(statements, desired, actual, desired.Name, oldParentName)
+
+	for _, tableName := range referencingTables {
+		desiredChild := desiredTables[tableName]
+		actualChild := actualTables[tableName]
+		oldChildName := "__d1pac_" + tableName + "_old"
+		statements = append(statements,
+			"ALTER TABLE "+model.QuoteIdentifier(tableName)+" RENAME TO "+model.QuoteIdentifier(oldChildName)+";",
+			ensureSemicolon(desiredChild.SQL),
+		)
+		statements = appendCopyColumns(statements, desiredChild, actualChild, tableName, oldChildName)
+		statements = append(statements, "DROP TABLE "+model.QuoteIdentifier(oldChildName)+";")
+	}
+	statements = append(statements, "DROP TABLE "+model.QuoteIdentifier(oldParentName)+";")
+
+	for _, index := range desiredSchema.Indexes {
+		if rebuiltNames[index.TableName] {
+			statements = append(statements, ensureSemicolon(index.SQL))
+		}
+	}
+	for _, viewName := range dependentViews {
+		statements = append(statements, ensureSemicolon(desiredViews[viewName].SQL))
+	}
+	for _, trigger := range desiredSchema.Triggers {
+		if rebuiltNames[trigger.TableName] {
+			statements = append(statements, ensureSemicolon(trigger.SQL))
+		}
+	}
+	for _, triggerName := range dependentTriggers {
+		if trigger, exists := desiredTriggers[triggerName]; exists {
+			statements = append(statements, ensureSemicolon(trigger.SQL))
+		}
+	}
+
+	risk := rebuildRisk(desired, actual)
+	return operation(
+		"rebuild-table",
+		"table",
+		desired.Name,
+		risk,
+		strings.Join(statements, "\n"),
+	), dependentTriggers, ""
+}
+
+func appendCopyColumns(
+	statements []string,
+	desired model.TableDef,
+	actual model.TableDef,
+	destinationName string,
+	sourceName string,
+) []string {
+	actualColumns := map[string]bool{}
+	for _, column := range actual.Columns {
+		actualColumns[column.Name] = true
+	}
+	commonColumns := make([]string, 0)
+	for _, column := range desired.Columns {
+		if actualColumns[column.Name] {
+			commonColumns = append(commonColumns, model.QuoteIdentifier(column.Name))
+		}
+	}
+	if len(commonColumns) == 0 {
+		return statements
+	}
+	columns := strings.Join(commonColumns, ", ")
+	return append(statements, fmt.Sprintf(
+		"INSERT INTO %s (%s) SELECT %s FROM %s;",
+		model.QuoteIdentifier(destinationName),
+		columns,
+		columns,
+		model.QuoteIdentifier(sourceName),
+	))
+}
+
+func rebuildRisk(desired, actual model.TableDef) string {
+	desiredColumns := map[string]bool{}
+	for _, column := range desired.Columns {
+		desiredColumns[column.Name] = true
+	}
+	for _, column := range actual.Columns {
+		if !desiredColumns[column.Name] {
+			return "destructive"
+		}
+	}
+	return "migration"
 }
 
 func diffIndexes(
@@ -355,13 +533,13 @@ func referencedTableRebuildReason(
 	insertedColumns, ok := nonTrailingColumnAdditions(desired, actual)
 	if ok {
 		return fmt.Sprintf(
-			"non-destructive migration must rebuild the table to place new column(s) %s in the declared order; automatic rebuild is unsafe because retained table(s) %s reference this table",
+			"non-destructive migration must rebuild the table to place new column(s) %s in the declared order; automatic rebuild requires transactional apply because retained table(s) %s reference this table",
 			quotedNames(insertedColumns),
 			quotedNames(referencingTables),
 		)
 	}
 	return fmt.Sprintf(
-		"automatic rebuild is unsafe because retained table(s) %s reference this table",
+		"automatic rebuild requires transactional apply because retained table(s) %s reference this table",
 		quotedNames(referencingTables),
 	)
 }
@@ -496,17 +674,7 @@ func rebuildTableOperation(desired, actual model.TableDef, desiredSchema, actual
 			statements = append(statements, ensureSemicolon(trigger.SQL))
 		}
 	}
-	risk := "migration"
-	desiredColumns := map[string]bool{}
-	for _, column := range desired.Columns {
-		desiredColumns[column.Name] = true
-	}
-	for _, column := range actual.Columns {
-		if !desiredColumns[column.Name] {
-			risk = "destructive"
-			break
-		}
-	}
+	risk := rebuildRisk(desired, actual)
 	return operation(
 		"rebuild-table",
 		"table",

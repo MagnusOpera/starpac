@@ -6,6 +6,12 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+### d1pac
+
+- Allowed referenced tables to be rebuilt during transactional apply, using
+  deferred foreign-key enforcement while retaining the existing block for
+  non-transactional projects.
+
 ## [0.8.0]
 
 

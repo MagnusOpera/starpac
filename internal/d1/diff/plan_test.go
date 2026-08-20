@@ -208,7 +208,45 @@ func TestBuildPlanBlocksDestructiveRebuild(t *testing.T) {
 	}
 }
 
-func TestBuildPlanBlocksRebuildOfReferencedTable(t *testing.T) {
+func TestBuildPlanAllowsTransactionalRebuildOfReferencedTable(t *testing.T) {
+	project := writableProject()
+	project.Target.Apply.UseTransaction = true
+	desiredParent := table("widgets", column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"))
+	actualParent := table("widgets", column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"))
+	child := table("events", column("widget_id", "INTEGER", true, 0, "widget_id INTEGER NOT NULL"))
+	child.ForeignKeys = []model.ForeignKeyDef{{
+		Table:    "widgets",
+		From:     "widget_id",
+		To:       "id",
+		OnUpdate: "NO ACTION",
+		OnDelete: "CASCADE",
+		Match:    "NONE",
+	}}
+	plan := BuildPlan(
+		project,
+		&model.SchemaModel{Tables: []model.TableDef{child, desiredParent}},
+		&model.SchemaModel{Tables: []model.TableDef{child, actualParent}},
+		Options{AllowDrop: true},
+	)
+	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "rebuild-table" {
+		t.Fatalf("unexpected operations: %#v", plan.Operations)
+	}
+	if !plan.Summary.Supported {
+		t.Fatal("transactional referenced-table rebuild must be supported")
+	}
+	for _, expected := range []string{
+		`ALTER TABLE "widgets" RENAME TO "__d1pac_widgets_old"`,
+		`ALTER TABLE "events" RENAME TO "__d1pac_events_old"`,
+		`DROP TABLE "__d1pac_events_old"`,
+		`DROP TABLE "__d1pac_widgets_old"`,
+	} {
+		if !strings.Contains(plan.Operations[0].SQL, expected) {
+			t.Fatalf("transactional rebuild SQL does not contain %q: %s", expected, plan.Operations[0].SQL)
+		}
+	}
+}
+
+func TestBuildPlanBlocksNonTransactionalRebuildOfReferencedTable(t *testing.T) {
 	project := writableProject()
 	desiredParent := table("widgets", column("id", "TEXT", true, 1, "id TEXT PRIMARY KEY"))
 	actualParent := table("widgets", column("id", "INTEGER", true, 1, "id INTEGER PRIMARY KEY"))
@@ -230,7 +268,7 @@ func TestBuildPlanBlocksRebuildOfReferencedTable(t *testing.T) {
 	if len(plan.Operations) != 1 || plan.Operations[0].Kind != "blocked-rebuild-table" {
 		t.Fatalf("unexpected operations: %#v", plan.Operations)
 	}
-	if !strings.Contains(plan.Operations[0].Reason, `retained table(s) "events" reference this table`) {
+	if !strings.Contains(plan.Operations[0].Reason, `requires transactional apply because retained table(s) "events" reference this table`) {
 		t.Fatalf("unexpected block reason: %s", plan.Operations[0].Reason)
 	}
 }
