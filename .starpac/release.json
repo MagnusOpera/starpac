@@ -1,23 +1,22 @@
 {
-  "version": "0.7.5",
-  "previous": "v0.7.4",
-  "commit": "ab3de0d69364c4d75c19a5a504ccbe24fd2d13d0",
+  "version": "0.8.0",
+  "previous": "v0.7.5",
+  "commit": "eb8be80f8d8fa8b5ed79d11bf3f9d1cc7c3bd136",
   "artifacts": [
     "pgpac",
     "d1pac"
   ],
   "reasons": {
     "pgpac": [
-      "internal/pac/plan/plan.go",
-      "internal/pac/render/render.go",
-      "internal/pac/render/render_test.go"
+      "internal/postgres/diff/plan_test.go"
     ],
     "d1pac": [
+      "cmd/d1pac/main.go",
+      "cmd/d1pac/main_test.go",
       "internal/d1/diff/plan.go",
       "internal/d1/diff/plan_test.go",
-      "internal/pac/plan/plan.go",
-      "internal/pac/render/render.go",
-      "internal/pac/render/render_test.go"
+      "internal/d1/model/sql.go",
+      "internal/d1/model/sql_test.go"
     ]
   }
 }

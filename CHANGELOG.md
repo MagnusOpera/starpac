@@ -6,6 +6,9 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.8.0]
+
+
 ### d1pac
 
 - Made table comparison column-order independent by default so addable columns
@@ -17,6 +20,7 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 - Added regression coverage for non-trailing column additions and
   column-order-independent table comparison.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.7.5...v0.8.0
 ## [0.7.5]
 
 

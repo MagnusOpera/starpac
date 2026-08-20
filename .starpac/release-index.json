@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "starpacVersion": "0.7.5",
+  "starpacVersion": "0.8.0",
   "products": {
     "pgpac": {
-      "version": "0.7.5",
-      "tag": "v0.7.5"
+      "version": "0.8.0",
+      "tag": "v0.8.0"
     },
     "d1pac": {
-      "version": "0.7.5",
-      "tag": "v0.7.5"
+      "version": "0.8.0",
+      "tag": "v0.8.0"
     }
   }
 }
