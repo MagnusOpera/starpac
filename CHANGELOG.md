@@ -6,12 +6,16 @@ Global Starpac versioning begins at `0.6.0`. Earlier entries retain their produc
 
 ## [Unreleased]
 
+## [0.8.1]
+
+
 ### d1pac
 
 - Allowed referenced tables to be rebuilt during transactional apply, using
   deferred foreign-key enforcement while retaining the existing block for
   non-transactional projects.
 
+**Full Changelog**: https://github.com/MagnusOpera/starpac/compare/v0.8.0...v0.8.1
 ## [0.8.0]
 
 
